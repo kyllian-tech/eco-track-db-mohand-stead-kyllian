@@ -16,9 +16,9 @@ const supabase = createClient(url, key)
 
 async function main() {
   const { data, error } = await supabase
-    .from('badges') // remplacé par une table existante
+    .from('challenges') // remplacé par une table existante
     .select('*')
-    .limit(1)
+    
 
   if (error) {
     console.error(" Erreur Supabase :", error.message)
