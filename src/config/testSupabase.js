@@ -1,6 +1,11 @@
+/**
+ * Fichier : testSupabase.js
+ * Rôle : Script de test pour vérifier la connexion à Supabase.
+ * Utilité : Permet de valider que les variables d'environnement (.env) et l'accès réseau fonctionnent.
+ * À exécuter : node src/config/testSupabase.js 
+ */
+
 require('dotenv').config()
-
-
 
 const { createClient } = require('@supabase/supabase-js')
 
@@ -12,9 +17,13 @@ if (!url || !key) {
   process.exit(1)
 }
 
+// initialiser le client Supabase
 const supabase = createClient(url, key)
 
-async function main() {
+async function testSupabaseConnection() {
+  // lancer une requête simple (ex: select 1 table ou ping)
+  //  afficher le résultat/erreur dans la console
+  
   const { data, error } = await supabase
     .from('challenges') // remplacé par une table existante
     .select('*')
@@ -28,4 +37,4 @@ async function main() {
   console.log(" Connexion OK ! Données :", data)
 }
 
-main()
+testSupabaseConnection()

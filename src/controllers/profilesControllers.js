@@ -1,3 +1,12 @@
+/**
+ * Fichier : profilesControllers.js
+ * Rôle : Contrôleur HTTP pour la ressource "profiles".
+ * Fonctionnement :
+ * - Valide les paramètres (req.params, req.query, req.body)
+ * - Appelle les fonctions métier/service (ou supabase directement)
+ * - Formate la réponse JSON (res.json / res.status)
+ */
+
 const { supabaseAdmin } = require('../config/supabaseAdmin')
 
 const TABLE = 'profiles'
