@@ -16,17 +16,42 @@ exports.getById = async (req, res) => {
 }
 
 exports.create = async (req, res) => {
-  const { data, error } = await supabaseAdmin.from(TABLE).insert(req.body).select('*').single()
+  const { data, error } = await supabaseAdmin.from(TABLE).insert(req.body).select('*')
   if (error) return res.status(400).json({ error: error.message })
   res.status(201).json(data)
 }
 
 exports.update = async (req, res) => {
-  const { id } = req.params
-  const { data, error } = await supabaseAdmin.from(TABLE).update(req.body).eq('id', id).select('*').single()
-  if (error) return res.status(400).json({ error: error.message })
-  res.json(data)
-}
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabaseAdmin
+      .schema("public")
+      .from("challenges")
+      .update(req.body)
+      .eq("id", id)
+      .select("*");
+
+    if (error) {
+      return res.status(400).json({
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+    }
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: "Challenge introuvable" });
+    }
+
+    return res.json(data[0]); // 1ère ligne mise à jour
+  } catch (e) {
+    console.error("[challenges] update crash:", e);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 
 exports.remove = async (req, res) => {
   const { id } = req.params

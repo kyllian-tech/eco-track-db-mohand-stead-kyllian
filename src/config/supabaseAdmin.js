@@ -8,6 +8,13 @@ if (!supabaseUrl || !serviceRoleKey) {
 }
 
 // Client “admin” : bypass RLS (à protéger derrière ton API)
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
+const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+  auth: { persistSession: false },
+});
+
+console.log("✅ Using SUPABASE_URL:", process.env.SUPABASE_URL);
+
 
 module.exports = { supabaseAdmin }
+
+console.log("SUPABASE_URL =", process.env.SUPABASE_URL);
