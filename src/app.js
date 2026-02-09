@@ -21,6 +21,12 @@ app.use("/api/zones", require("./routes/zonesRoutes"));
 app.use("/api/containers", require("./routes/containersRoutes"));
 app.use("/api/measurements", require("./routes/measurementsRoutes"));
 app.use("/api/routes", require("./routes/routesRoutes"));
+app.use("/api/route-steps", require("./routes/routeStepsRoutes"));
+app.use("/api/signalements", require("./routes/signalementsRoutes"));
+app.use("/api/signalement-photos", require("./routes/signalementPhotosRoutes"));
+app.use("/api/tickets-support", require("./routes/ticketsSupportRoutes"));
+app.use("/api/user-badges", require("./routes/userBadgesRoutes"));
+app.use("/api/user-refresh-tokens", require("./routes/userRefreshTokensRoutes"));
 
 
 
