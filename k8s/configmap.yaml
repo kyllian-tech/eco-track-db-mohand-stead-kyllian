@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecotrack-api-config
+  namespace: ecotrack-prod
+data:
+  NODE_ENV: production
+  PORT: "3000"
+  LOG_LEVEL: info
+  JWT_ACCESS_EXPIRES_IN: 15m
+  JWT_REFRESH_EXPIRES_IN: 7d
+  CORS_ORIGIN: "https://app.ecotrack.com,https://mobile.ecotrack.com"
+  PROMETHEUS_ENABLED: "true"
+  OTEL_DEBUG: "false"

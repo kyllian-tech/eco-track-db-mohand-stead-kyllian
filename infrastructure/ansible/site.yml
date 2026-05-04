@@ -1,0 +1,33 @@
+---
+# M9.3 — Ansible Configuration Management — EcoTrack
+# Usage: ansible-playbook site.yml -i inventory/prod.ini --vault-password-file .vault_pass
+- name: Common server hardening
+  hosts: all
+  become: true
+  roles:
+    - common
+    - security
+
+- name: Configure PostgreSQL nodes
+  hosts: postgres
+  become: true
+  roles:
+    - postgresql
+
+- name: Configure Kafka nodes
+  hosts: kafka
+  become: true
+  roles:
+    - kafka
+
+- name: Configure Nginx / reverse proxy
+  hosts: nginx
+  become: true
+  roles:
+    - nginx
+
+- name: Configure monitoring agents
+  hosts: all
+  become: true
+  roles:
+    - monitoring

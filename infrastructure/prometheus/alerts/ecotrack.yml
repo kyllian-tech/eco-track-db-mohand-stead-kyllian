@@ -1,0 +1,89 @@
+# M13.4 — Prometheus Alerting Rules for EcoTrack
+groups:
+  - name: ecotrack-api
+    interval: 30s
+    rules:
+      # SLO: Error rate > 1%
+      - alert: HighErrorRate
+        expr: |
+          rate(http_requests_total{status=~"5.."}[5m])
+          / rate(http_requests_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "EcoTrack API error rate above SLO (1%)"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+          runbook: "https://docs.ecotrack.com/runbooks/high-error-rate"
+
+      # SLO: P95 latency > 500ms
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 API latency above 500ms"
+          description: "P95 latency is {{ $value | humanizeDuration }}"
+          runbook: "https://docs.ecotrack.com/runbooks/high-latency"
+
+      # Memory > 450MB
+      - alert: HighMemoryUsage
+        expr: process_rss_bytes > 472446402
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "EcoTrack API memory usage high"
+          description: "Memory usage: {{ $value | humanize1024 }}B"
+
+      # Pod restarts > 3 per hour
+      - alert: PodRestarting
+        expr: |
+          increase(kube_pod_container_status_restarts_total{
+            namespace="ecotrack-prod", container="ecotrack-api"
+          }[1h]) > 3
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "EcoTrack API pod restarting"
+          description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last hour."
+
+  - name: ecotrack-business
+    rules:
+      # Container fill level critical
+      - alert: ContainerFillLevelCritical
+        expr: ecotrack_container_fill_level > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container fill level critical"
+          description: "Container {{ $labels.container_id }} fill level: {{ $value }}%"
+
+      # No measurements received in 30 minutes
+      - alert: NoMeasurementsReceived
+        expr: |
+          rate(kafka_messages_consumed_total{topic="iot.measurements"}[30m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No IoT measurements received"
+          description: "No measurements received from sensors in the last 30 minutes."
+
+      # SLO Burn Rate alert (error budget)
+      - alert: SLOBurnRateCritical
+        expr: |
+          (
+            rate(http_requests_total{status=~"5.."}[1h])
+            / rate(http_requests_total[1h])
+          ) > 14.4 * 0.001
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SLO burn rate critical — error budget depleting"
+          description: "Burn rate: {{ $value | humanizePercentage }}. At this rate, the monthly error budget will be exhausted in < 1 hour."

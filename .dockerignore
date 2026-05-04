@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log*
+.env
+.env.*
+!.env.example
+coverage
+tests
+docs
+*.md
+.git
+.gitignore
+.gitlab-ci.yml
+k8s
+helm
+infrastructure

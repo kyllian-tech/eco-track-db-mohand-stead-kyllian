@@ -1,0 +1,79 @@
+# OWASP ZAP Automated Security Scanning Configuration
+# Usage: docker run --rm -v $(pwd):/zap/wrk zaproxy/zap-stable:latest \
+#   zap-api-scan.py -t /zap/wrk/docs/api/openapi.yaml \
+#   -f openapi -c /zap/wrk/tests/security/zap-config.yaml \
+#   -r /zap/wrk/reports/zap-report.html
+
+env:
+  contexts:
+    - name: ecotrack-api
+      urls:
+        - https://api.staging.ecotrack.com
+      authentication:
+        method: json
+        parameters:
+          loginUrl: https://api.staging.ecotrack.com/api/auth/login
+          loginRequestData: '{"email":"zap-test@ecotrack.com","password":"ZapTest123!"}'
+          loginPageValidation:
+            loggedInRegex: '"access_token"'
+        sessionManagement:
+          method: headers
+          parameters:
+            headerName: Authorization
+            headerValue: Bearer {%json:access_token%}
+      excludeFromContext:
+        - https://api.staging.ecotrack.com/metrics
+        - https://api.staging.ecotrack.com/health.*
+
+  rules:
+    - id: 10055  # CSP scanner
+      threshold: MEDIUM
+    - id: 10098  # Cross-Domain Misconfiguration
+      threshold: MEDIUM
+    - id: 40012  # Cross Site Scripting (Reflected)
+      strength: MEDIUM
+    - id: 40014  # Cross Site Scripting (Persistent)
+      strength: MEDIUM
+    - id: 40018  # SQL Injection
+      strength: HIGH
+    - id: 40019  # SQL Injection (MySQL)
+      strength: HIGH
+    - id: 40020  # SQL Injection (Hypersonic)
+      strength: HIGH
+    - id: 40021  # SQL Injection (Oracle)
+      strength: HIGH
+    - id: 40022  # SQL Injection (PostgreSQL)
+      strength: HIGH
+    - id: 40024  # SQL Injection (SQLite)
+      strength: HIGH
+    - id: 90020  # Remote OS Command Injection
+      strength: HIGH
+    - id: 90021  # XPath Injection
+      strength: MEDIUM
+    - id: 40003  # CRLF Injection
+      strength: MEDIUM
+    - id: 10010  # Cookie without SameSite
+      threshold: LOW
+    - id: 10011  # Cookie without Secure
+      threshold: LOW
+    - id: 10015  # Incomplete or No Cache-control and Pragma
+      threshold: LOW
+
+  jobs:
+    - type: passiveScan-config
+      parameters:
+        maxAlertsPerRule: 10
+    - type: spider
+      parameters:
+        maxDuration: 5
+        maxDepth: 5
+        maxChildren: 20
+    - type: activeScan
+      parameters:
+        maxScanDuration: 30
+        maxRuleDuration: 5
+    - type: report
+      parameters:
+        template: traditional-html
+        reportDir: reports
+        reportFile: zap-report

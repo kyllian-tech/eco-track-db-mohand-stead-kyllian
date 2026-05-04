@@ -1,0 +1,69 @@
+# M9.7 — ArgoCD GitOps Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ecotrack-api
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ecotrack
+  source:
+    repoURL: https://gitlab.com/ecotrack/ecotrack-api.git
+    targetRevision: main
+    path: helm/ecotrack-api
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ecotrack-prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 5
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ecotrack
+  namespace: argocd
+spec:
+  description: EcoTrack Platform
+  sourceRepos:
+    - https://gitlab.com/ecotrack/*
+  destinations:
+    - namespace: ecotrack-*
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: apps
+      kind: Deployment
+    - group: ''
+      kind: Service
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: policy
+      kind: PodDisruptionBudget
+  roles:
+    - name: developer
+      description: Read-only access for developers
+      policies:
+        - p, proj:ecotrack:developer, applications, get, ecotrack/*, allow

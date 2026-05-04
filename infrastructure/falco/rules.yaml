@@ -1,0 +1,67 @@
+# M6.10 — Falco IDS/IPS Rules pour EcoTrack
+# Déploiement : helm install falco falcosecurity/falco -n falco-system
+
+- rule: Shell Spawned in EcoTrack Pod
+  desc: Détecte l'ouverture d'un shell dans un pod EcoTrack (possible intrusion)
+  condition: >
+    spawned_process and container and
+    container.label.app in (ecotrack-api, ecotrack-worker) and
+    proc.name in (bash, sh, zsh, fish) and
+    not proc.pname in (node, npm)
+  output: >
+    Shell spawned in EcoTrack container
+    (pod=%k8s.pod.name ns=%k8s.ns.name user=%user.name cmd=%proc.cmdline image=%container.image)
+  priority: CRITICAL
+  tags: [ecotrack, intrusion]
+
+- rule: Unexpected Network Connection from EcoTrack Pod
+  desc: Détecte une connexion réseau non prévue depuis un pod EcoTrack
+  condition: >
+    outbound and container and
+    container.label.app = ecotrack-api and
+    not (
+      fd.sport in (443, 5432, 6379, 9092) or
+      fd.sip.name in (*.supabase.co, redis, kafka)
+    )
+  output: >
+    Unexpected outbound connection from EcoTrack pod
+    (pod=%k8s.pod.name dest=%fd.name cmd=%proc.cmdline)
+  priority: HIGH
+  tags: [ecotrack, network]
+
+- rule: EcoTrack Sensitive File Read
+  desc: Lecture non autorisée de fichiers secrets dans un pod EcoTrack
+  condition: >
+    open_read and container and
+    container.label.app = ecotrack-api and
+    fd.name in (/proc/1/environ, /etc/shadow, /etc/passwd) and
+    not proc.name in (node)
+  output: >
+    Sensitive file read in EcoTrack pod
+    (pod=%k8s.pod.name file=%fd.name cmd=%proc.cmdline)
+  priority: HIGH
+  tags: [ecotrack, filesystem]
+
+- rule: EcoTrack Package Manager Execution
+  desc: Exécution d'un gestionnaire de paquets dans un conteneur EcoTrack (possible backdoor install)
+  condition: >
+    spawned_process and container and
+    container.label.app = ecotrack-api and
+    proc.name in (npm, pip, pip3, apt, yum, apk, curl, wget)
+  output: >
+    Package manager executed in EcoTrack container
+    (pod=%k8s.pod.name cmd=%proc.cmdline)
+  priority: HIGH
+  tags: [ecotrack, process]
+
+- rule: EcoTrack Crypto Mining
+  desc: Détecte un binaire de minage de crypto dans un pod EcoTrack
+  condition: >
+    spawned_process and container and
+    container.label.app in (ecotrack-api, ecotrack-worker) and
+    proc.name in (xmrig, ccminer, t-rex, nbminer, nanominer)
+  output: >
+    Crypto mining binary detected in EcoTrack pod
+    (pod=%k8s.pod.name cmd=%proc.cmdline)
+  priority: CRITICAL
+  tags: [ecotrack, cryptomining]

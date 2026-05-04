@@ -1,0 +1,230 @@
+---
+# ECOTRACK API — GitLab CI/CD Pipeline
+# 7 stages: lint → test → security → build → staging → performance → production
+
+stages:
+  - lint
+  - test
+  - security
+  - build
+  - staging
+  - performance
+  - production
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_BUILDKIT: "1"
+  IMAGE_NAME: $CI_REGISTRY_IMAGE/ecotrack-api
+  IMAGE_TAG: $CI_COMMIT_SHA
+  KUBECONFIG: /tmp/kubeconfig
+  NODE_VERSION: "20"
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+
+# ── Lint ───────────────────────────────────────────────────────────────────────
+lint:eslint:
+  stage: lint
+  image: node:20-alpine
+  script:
+    - npm ci
+    - npx eslint src/ --ext .js --max-warnings 0
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+lint:audit:
+  stage: lint
+  image: node:20-alpine
+  script:
+    - npm ci
+    - npm audit --audit-level=high
+  allow_failure: false
+
+# ── Test ───────────────────────────────────────────────────────────────────────
+test:unit:
+  stage: test
+  image: node:20-alpine
+  script:
+    - npm ci
+    - npm test
+  coverage: '/Statements\s*:\s*([\d.]+)%/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+    paths:
+      - coverage/
+    expire_in: 7 days
+
+test:mutation:
+  stage: test
+  image: node:20-alpine
+  script:
+    - npm ci
+    - npx stryker run --reporters json,html
+  artifacts:
+    paths:
+      - reports/mutation/
+    expire_in: 7 days
+  allow_failure: true
+
+# ── Security ───────────────────────────────────────────────────────────────────
+security:sast:
+  stage: security
+  image: node:20-alpine
+  script:
+    - npm ci
+    - npx semgrep --config=p/javascript --output=semgrep-report.json --json
+  artifacts:
+    paths:
+      - semgrep-report.json
+    expire_in: 30 days
+  allow_failure: true
+
+security:dependency-scan:
+  stage: security
+  image: aquasec/trivy:latest
+  script:
+    - trivy fs --exit-code 1 --severity HIGH,CRITICAL --format table .
+  allow_failure: false
+
+security:container-scan:
+  stage: security
+  image: aquasec/trivy:latest
+  needs: ["build:docker"]
+  script:
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL --format table $IMAGE_NAME:$IMAGE_TAG
+  allow_failure: false
+
+# ── Build ──────────────────────────────────────────────────────────────────────
+build:docker:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - |
+      docker build \
+        --target production \
+        --cache-from $IMAGE_NAME:latest \
+        --build-arg BUILDKIT_INLINE_CACHE=1 \
+        -t $IMAGE_NAME:$IMAGE_TAG \
+        -t $IMAGE_NAME:latest .
+    - docker push $IMAGE_NAME:$IMAGE_TAG
+    - docker push $IMAGE_NAME:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^release\/.*/
+
+# ── Staging ────────────────────────────────────────────────────────────────────
+deploy:staging:
+  stage: staging
+  image: bitnami/kubectl:latest
+  environment:
+    name: staging
+    url: https://api.staging.ecotrack.com
+  before_script:
+    - echo "$KUBE_CONFIG_STAGING" | base64 -d > $KUBECONFIG
+  script:
+    - kubectl set image deployment/ecotrack-api ecotrack-api=$IMAGE_NAME:$IMAGE_TAG -n ecotrack-staging
+    - kubectl rollout status deployment/ecotrack-api -n ecotrack-staging --timeout=120s
+    - kubectl run smoke-test --rm -i --restart=Never --image=curlimages/curl --
+        curl -fsS https://api.staging.ecotrack.com/health/ready
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# ── Performance ────────────────────────────────────────────────────────────────
+performance:k6:
+  stage: performance
+  image: grafana/k6:latest
+  needs: ["deploy:staging"]
+  script:
+    - k6 run --out json=k6-results.json tests/load/k6-smoke.js
+  artifacts:
+    paths:
+      - k6-results.json
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+performance:owasp-zap:
+  stage: performance
+  image: zaproxy/zap-stable:latest
+  needs: ["deploy:staging"]
+  script:
+    - zap-baseline.py -t https://api.staging.ecotrack.com -r zap-report.html -I
+  artifacts:
+    paths:
+      - zap-report.html
+    expire_in: 30 days
+  allow_failure: true
+
+# ── Production (Blue/Green) ────────────────────────────────────────────────────
+.deploy-bluegreen: &deploy-bluegreen
+  image: bitnami/kubectl:latest
+  before_script:
+    - echo "$KUBE_CONFIG_PROD" | base64 -d > $KUBECONFIG
+  script:
+    - |
+      CURRENT_COLOR=$(kubectl get svc ecotrack-api -n ecotrack-prod -o jsonpath='{.spec.selector.color}' 2>/dev/null || echo "blue")
+      NEW_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+      echo "Deploying $NEW_COLOR (was $CURRENT_COLOR)"
+
+      # Deploy new version to inactive slot
+      kubectl set image deployment/ecotrack-api-$NEW_COLOR \
+        ecotrack-api=$IMAGE_NAME:$IMAGE_TAG -n ecotrack-prod
+      kubectl rollout status deployment/ecotrack-api-$NEW_COLOR -n ecotrack-prod --timeout=300s
+
+      # Sanity check on new slot
+      NEW_POD=$(kubectl get pod -n ecotrack-prod -l app=ecotrack-api,color=$NEW_COLOR -o jsonpath='{.items[0].metadata.name}')
+      kubectl exec $NEW_POD -n ecotrack-prod -- wget -qO- http://localhost:3000/health/ready
+
+      # Traffic shift
+      kubectl patch svc ecotrack-api -n ecotrack-prod -p "{\"spec\":{\"selector\":{\"color\":\"$NEW_COLOR\"}}}"
+
+      echo "Traffic shifted to $NEW_COLOR"
+
+      # Scale down old slot
+      kubectl scale deployment/ecotrack-api-$CURRENT_COLOR --replicas=1 -n ecotrack-prod
+  after_script:
+    - |
+      if [ $CI_JOB_STATUS == "failed" ]; then
+        echo "Deployment failed — rolling back"
+        CURRENT_COLOR=$(kubectl get svc ecotrack-api -n ecotrack-prod -o jsonpath='{.spec.selector.color}')
+        OLD_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+        kubectl patch svc ecotrack-api -n ecotrack-prod -p "{\"spec\":{\"selector\":{\"color\":\"$OLD_COLOR\"}}}"
+      fi
+
+deploy:production:
+  stage: production
+  <<: *deploy-bluegreen
+  environment:
+    name: production
+    url: https://api.ecotrack.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  needs:
+    - deploy:staging
+    - performance:k6
+
+sonarqube:
+  stage: test
+  image: sonarsource/sonar-scanner-cli:latest
+  script:
+    - sonar-scanner
+        -Dsonar.projectKey=ecotrack-api
+        -Dsonar.sources=src
+        -Dsonar.tests=tests
+        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+        -Dsonar.host.url=$SONARQUBE_URL
+        -Dsonar.login=$SONARQUBE_TOKEN
+  allow_failure: true

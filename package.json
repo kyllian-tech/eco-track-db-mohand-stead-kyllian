@@ -1,0 +1,30 @@
+{
+  "name": "ecotrack-api-production",
+  "version": "2.0.0",
+  "description": "ECOTRACK API refactorisée pour la production : architecture en couches, sécurité, tests et monitoring.",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test tests/**/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage tests/**/*.test.js"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "api",
+    "ecotrack",
+    "jwt",
+    "zod"
+  ],
+  "author": "Mohand / Stead / Kyllian",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.90.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "zod": "^4.3.6"
+  }
+}

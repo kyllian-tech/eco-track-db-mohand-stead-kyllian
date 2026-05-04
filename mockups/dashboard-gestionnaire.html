@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoTrack — Dashboard Gestionnaire</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --green-50: #f0fdf4; --green-100: #dcfce7; --green-500: #22c55e;
+    --green-600: #16a34a; --green-700: #15803d; --green-800: #166534;
+    --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
+    --gray-300: #d1d5db; --gray-400: #9ca3af; --gray-500: #6b7280;
+    --gray-600: #4b5563; --gray-700: #374151; --gray-800: #1f2937;
+    --gray-900: #111827;
+    --red-500: #ef4444; --red-100: #fee2e2;
+    --orange-500: #f97316; --orange-100: #ffedd5;
+    --blue-500: #3b82f6; --blue-100: #dbeafe;
+    --yellow-500: #eab308; --yellow-100: #fef9c3;
+    --sidebar-w: 240px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--gray-50); color: var(--gray-800); display: flex; height: 100vh; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: var(--sidebar-w); background: var(--gray-900); color: white;
+    display: flex; flex-direction: column; flex-shrink: 0; z-index: 10;
+  }
+  .sidebar-logo {
+    padding: 20px 24px; border-bottom: 1px solid #ffffff15;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .logo-icon { width: 32px; height: 32px; background: var(--green-500); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .logo-text { font-size: 18px; font-weight: 700; }
+  .logo-sub { font-size: 11px; color: var(--gray-400); }
+  .sidebar-nav { flex: 1; padding: 16px 0; overflow-y: auto; }
+  .nav-section { padding: 8px 24px 4px; font-size: 10px; font-weight: 600;
+    text-transform: uppercase; color: var(--gray-500); letter-spacing: .08em; }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 24px;
+    font-size: 14px; cursor: pointer; transition: all .15s; color: var(--gray-400);
+    border-left: 3px solid transparent;
+  }
+  .nav-item:hover { background: #ffffff08; color: white; }
+  .nav-item.active { background: #ffffff10; color: white; border-left-color: var(--green-500); }
+  .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+  .nav-badge { margin-left: auto; background: var(--red-500); color: white;
+    font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600; }
+  .sidebar-user { padding: 16px 24px; border-top: 1px solid #ffffff15;
+    display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 34px; height: 34px; background: var(--green-600); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+  .user-info .name { font-size: 13px; font-weight: 600; }
+  .user-info .role { font-size: 11px; color: var(--gray-400); }
+
+  /* MAIN */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar {
+    background: white; border-bottom: 1px solid var(--gray-200);
+    padding: 0 28px; height: 60px; display: flex; align-items: center;
+    gap: 16px; flex-shrink: 0;
+  }
+  .topbar-title { font-size: 18px; font-weight: 700; flex: 1; }
+  .topbar-date { font-size: 13px; color: var(--gray-500); }
+  .topbar-btn {
+    display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+    background: var(--green-600); color: white; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .topbar-notif { position: relative; cursor: pointer; padding: 8px; }
+  .notif-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px;
+    background: var(--red-500); border-radius: 50%; border: 2px solid white; }
+
+  /* VIEWS */
+  .view { display: none; flex: 1; overflow-y: auto; padding: 24px 28px; }
+  .view.active { display: block; }
+
+  /* KPI CARDS */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .kpi-card {
+    background: white; border-radius: 12px; padding: 20px;
+    border: 1px solid var(--gray-200); position: relative; overflow: hidden;
+  }
+  .kpi-card::after { content: ''; position: absolute; top: 0; right: 0;
+    width: 60px; height: 60px; border-radius: 0 0 0 60px; opacity: .08; }
+  .kpi-card.green::after { background: var(--green-500); }
+  .kpi-card.red::after { background: var(--red-500); }
+  .kpi-card.blue::after { background: var(--blue-500); }
+  .kpi-card.orange::after { background: var(--orange-500); }
+  .kpi-label { font-size: 12px; color: var(--gray-500); font-weight: 500; margin-bottom: 6px; }
+  .kpi-value { font-size: 28px; font-weight: 800; color: var(--gray-900); line-height: 1; }
+  .kpi-trend { font-size: 12px; margin-top: 6px; display: flex; align-items: center; gap: 4px; }
+  .kpi-trend.up { color: var(--green-600); }
+  .kpi-trend.down { color: var(--red-500); }
+  .kpi-icon { font-size: 28px; position: absolute; top: 16px; right: 18px; opacity: .15; }
+
+  /* GRID LAYOUTS */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .grid-3-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+  /* CARDS */
+  .card { background: white; border-radius: 12px; border: 1px solid var(--gray-200); padding: 20px; }
+  .card-title { font-size: 15px; font-weight: 700; color: var(--gray-900); margin-bottom: 16px;
+    display: flex; align-items: center; justify-content: space-between; }
+  .card-title-label { display: flex; align-items: center; gap: 8px; }
+
+  /* TABLE */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; color: var(--gray-500); border-bottom: 1px solid var(--gray-200); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--gray-100); }
+  tr:hover td { background: var(--gray-50); }
+  tr:last-child td { border-bottom: none; }
+
+  /* BADGES */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px;
+    border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: var(--green-100); color: var(--green-700); }
+  .badge-red { background: var(--red-100); color: #b91c1c; }
+  .badge-orange { background: var(--orange-100); color: #c2410c; }
+  .badge-blue { background: var(--blue-100); color: #1d4ed8; }
+  .badge-gray { background: var(--gray-100); color: var(--gray-600); }
+
+  /* FILL BAR */
+  .fill-bar { height: 6px; background: var(--gray-200); border-radius: 3px; overflow: hidden; }
+  .fill-bar-inner { height: 100%; border-radius: 3px; }
+  .fill-low { background: var(--green-500); }
+  .fill-mid { background: var(--orange-500); }
+  .fill-high { background: var(--red-500); }
+
+  /* ALERT LIST */
+  .alert-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0;
+    border-bottom: 1px solid var(--gray-100); }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .alert-dot.red { background: var(--red-500); }
+  .alert-dot.orange { background: var(--orange-500); }
+  .alert-dot.blue { background: var(--blue-500); }
+  .alert-text { font-size: 13px; color: var(--gray-700); line-height: 1.4; }
+  .alert-time { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+
+  /* HEATMAP */
+  .heatmap-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+  .heatmap-cell { aspect-ratio: 1; border-radius: 4px; cursor: pointer; transition: transform .1s; position: relative; }
+  .heatmap-cell:hover { transform: scale(1.1); z-index: 5; }
+  .heatmap-cell::after { content: attr(data-zone); position: absolute; bottom: calc(100% + 4px);
+    left: 50%; transform: translateX(-50%); background: var(--gray-900); color: white;
+    font-size: 10px; padding: 3px 6px; border-radius: 4px; white-space: nowrap;
+    opacity: 0; pointer-events: none; transition: opacity .1s; }
+  .heatmap-cell:hover::after { opacity: 1; }
+  .heat-0 { background: #dcfce7; } .heat-1 { background: #86efac; }
+  .heat-2 { background: #fdba74; } .heat-3 { background: #f97316; }
+  .heat-4 { background: #ef4444; } .heat-5 { background: #991b1b; }
+
+  /* TOURNEE */
+  .tournee-item { display: flex; align-items: center; gap: 12px; padding: 12px 0;
+    border-bottom: 1px solid var(--gray-100); }
+  .tournee-item:last-child { border-bottom: none; }
+  .tournee-num { width: 28px; height: 28px; background: var(--green-100); color: var(--green-700);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .tournee-info { flex: 1; }
+  .tournee-name { font-size: 13px; font-weight: 600; }
+  .tournee-meta { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+  .progress-bar { height: 4px; background: var(--gray-200); border-radius: 2px; margin-top: 6px; }
+  .progress-inner { height: 100%; border-radius: 2px; background: var(--green-500); }
+
+  /* MAP PLACEHOLDER */
+  .map-placeholder { background: linear-gradient(135deg, #e0f2fe, #bae6fd);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: var(--blue-500); flex-direction: column; gap: 8px;
+    border: 2px dashed #93c5fd; }
+  .map-placeholder .map-icon { font-size: 40px; }
+
+  /* FORM */
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--gray-600); margin-bottom: 6px; display: block; }
+  .form-control { width: 100%; padding: 9px 12px; border: 1px solid var(--gray-300);
+    border-radius: 8px; font-size: 13px; outline: none; transition: border-color .15s; }
+  .form-control:focus { border-color: var(--green-500); box-shadow: 0 0 0 3px #22c55e20; }
+  .form-select { width: 100%; padding: 9px 12px; border: 1px solid var(--gray-300);
+    border-radius: 8px; font-size: 13px; background: white; }
+  .btn { padding: 9px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    cursor: pointer; border: none; transition: all .15s; }
+  .btn-primary { background: var(--green-600); color: white; }
+  .btn-primary:hover { background: var(--green-700); }
+  .btn-secondary { background: var(--gray-100); color: var(--gray-700); }
+  .btn-secondary:hover { background: var(--gray-200); }
+  .btn-danger { background: var(--red-100); color: #b91c1c; }
+  .btn-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* STAT MINI */
+  .stat-row { display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--gray-100); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row-label { font-size: 13px; color: var(--gray-600); }
+  .stat-row-value { font-size: 13px; font-weight: 700; color: var(--gray-900); }
+
+  /* LEGEND */
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray-600); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* RESPONSIVE canvas */
+  canvas { max-width: 100%; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">♻</div>
+    <div>
+      <div class="logo-text">EcoTrack</div>
+      <div class="logo-sub">Gestion des Déchets</div>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section">Principal</div>
+    <div class="nav-item active" onclick="showView('overview')">
+      <span class="icon">📊</span> Vue d'ensemble
+    </div>
+    <div class="nav-item" onclick="showView('heatmap')">
+      <span class="icon">🗺</span> Carte Thermique
+    </div>
+    <div class="nav-item" onclick="showView('tournees')">
+      <span class="icon">🚛</span> Tournées
+      <span class="nav-badge">3</span>
+    </div>
+    <div class="nav-item" onclick="showView('conteneurs')">
+      <span class="icon">🗑</span> Conteneurs
+    </div>
+    <div class="nav-item" onclick="showView('analytics')">
+      <span class="icon">📈</span> Analytics
+    </div>
+
+    <div class="nav-section">Gestion</div>
+    <div class="nav-item" onclick="showView('overview')">
+      <span class="icon">👥</span> Agents
+    </div>
+    <div class="nav-item" onclick="showView('overview')">
+      <span class="icon">📍</span> Zones
+    </div>
+    <div class="nav-item" onclick="showView('overview')">
+      <span class="icon">🔔</span> Alertes
+      <span class="nav-badge">7</span>
+    </div>
+    <div class="nav-item" onclick="showView('overview')">
+      <span class="icon">🎫</span> Support
+    </div>
+
+    <div class="nav-section">Système</div>
+    <div class="nav-item" onclick="showView('overview')">
+      <span class="icon">⚙</span> Paramètres
+    </div>
+    <div class="nav-item" onclick="showView('overview')">
+      <span class="icon">📄</span> Rapports
+    </div>
+  </nav>
+
+  <div class="sidebar-user">
+    <div class="avatar">MK</div>
+    <div class="user-info">
+      <div class="name">M. Kyllian</div>
+      <div class="role">Gestionnaire</div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="main">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="page-title">Vue d'ensemble</div>
+    <div class="topbar-date">📅 Dimanche 4 Mai 2026</div>
+    <div class="topbar-notif">🔔 <div class="notif-dot"></div></div>
+    <button class="topbar-btn">+ Nouvelle Tournée</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- VUE 1 — OVERVIEW                                       -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="view active" id="view-overview">
+    <!-- KPI Row -->
+    <div class="kpi-grid">
+      <div class="kpi-card green">
+        <div class="kpi-label">Conteneurs actifs</div>
+        <div class="kpi-value">1 847</div>
+        <div class="kpi-trend up">↑ +12 cette semaine</div>
+        <div class="kpi-icon">🗑</div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-label">Conteneurs critiques (>85%)</div>
+        <div class="kpi-value">43</div>
+        <div class="kpi-trend down">↑ +8 vs hier</div>
+        <div class="kpi-icon">⚠</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-label">Tournées aujourd'hui</div>
+        <div class="kpi-value">12</div>
+        <div class="kpi-trend up">8 terminées · 4 en cours</div>
+        <div class="kpi-icon">🚛</div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label">Signalements ouverts</div>
+        <div class="kpi-value">27</div>
+        <div class="kpi-trend down">↓ -5 vs hier</div>
+        <div class="kpi-icon">📋</div>
+      </div>
+    </div>
+
+    <div class="grid-3-1">
+      <!-- Chart remplissage -->
+      <div class="card">
+        <div class="card-title">
+          <div class="card-title-label">📈 Taux de remplissage moyen — 7 derniers jours</div>
+          <select style="font-size:12px;border:1px solid var(--gray-200);border-radius:6px;padding:4px 8px;">
+            <option>7 jours</option><option>30 jours</option><option>3 mois</option>
+          </select>
+        </div>
+        <canvas id="chart-fill" height="140"></canvas>
+      </div>
+
+      <!-- Alertes -->
+      <div class="card">
+        <div class="card-title">🔴 Alertes actives</div>
+        <div class="alert-item">
+          <div class="alert-dot red"></div>
+          <div>
+            <div class="alert-text">Zone Nord-Est — 6 conteneurs >90%</div>
+            <div class="alert-time">Il y a 8 min</div>
+          </div>
+        </div>
+        <div class="alert-item">
+          <div class="alert-dot red"></div>
+          <div>
+            <div class="alert-text">Conteneur #B-2847 débordement signalé</div>
+            <div class="alert-time">Il y a 23 min</div>
+          </div>
+        </div>
+        <div class="alert-item">
+          <div class="alert-dot orange"></div>
+          <div>
+            <div class="alert-text">Zone Sud — Tournée T-12 en retard (32 min)</div>
+            <div class="alert-time">Il y a 1h</div>
+          </div>
+        </div>
+        <div class="alert-item">
+          <div class="alert-dot orange"></div>
+          <div>
+            <div class="alert-text">Capteur #S-0491 batterie faible (12%)</div>
+            <div class="alert-time">Il y a 2h</div>
+          </div>
+        </div>
+        <div class="alert-item">
+          <div class="alert-dot blue"></div>
+          <div>
+            <div class="alert-text">Rapport hebdomadaire disponible</div>
+            <div class="alert-time">Aujourd'hui 08:00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Conteneurs par statut -->
+      <div class="card">
+        <div class="card-title">🗑 Dernières mesures IoT</div>
+        <table>
+          <thead>
+            <tr><th>Conteneur</th><th>Zone</th><th>Niveau</th><th>Statut</th><th>Mis à jour</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>#C-1024</strong></td>
+              <td>Nord-Est</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="fill-bar" style="width:80px"><div class="fill-bar-inner fill-high" style="width:92%"></div></div>
+                  <span style="font-size:12px;font-weight:700;color:#ef4444">92%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-red">● Critique</span></td>
+              <td style="color:var(--gray-400);font-size:12px">Il y a 5 min</td>
+            </tr>
+            <tr>
+              <td><strong>#C-0872</strong></td>
+              <td>Centre</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="fill-bar" style="width:80px"><div class="fill-bar-inner fill-mid" style="width:78%"></div></div>
+                  <span style="font-size:12px;font-weight:700;color:#f97316">78%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-orange">● Élevé</span></td>
+              <td style="color:var(--gray-400);font-size:12px">Il y a 12 min</td>
+            </tr>
+            <tr>
+              <td><strong>#C-1456</strong></td>
+              <td>Ouest</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="fill-bar" style="width:80px"><div class="fill-bar-inner fill-low" style="width:34%"></div></div>
+                  <span style="font-size:12px;font-weight:700;color:#22c55e">34%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-green">● Normal</span></td>
+              <td style="color:var(--gray-400);font-size:12px">Il y a 18 min</td>
+            </tr>
+            <tr>
+              <td><strong>#C-0311</strong></td>
+              <td>Sud</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="fill-bar" style="width:80px"><div class="fill-bar-inner fill-mid" style="width:65%"></div></div>
+                  <span style="font-size:12px;font-weight:700;color:#f97316">65%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-orange">● Modéré</span></td>
+              <td style="color:var(--gray-400);font-size:12px">Il y a 25 min</td>
+            </tr>
+            <tr>
+              <td><strong>#C-2091</strong></td>
+              <td>Est</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="fill-bar" style="width:80px"><div class="fill-bar-inner fill-low" style="width:18%"></div></div>
+                  <span style="font-size:12px;font-weight:700;color:#22c55e">18%</span>
+                </div>
+              </td>
+              <td><span class="badge badge-green">● Normal</span></td>
+              <td style="color:var(--gray-400);font-size:12px">Il y a 31 min</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tournées du jour -->
+      <div class="card">
+        <div class="card-title">🚛 Tournées du jour</div>
+        <div class="tournee-item">
+          <div class="tournee-num">1</div>
+          <div class="tournee-info">
+            <div class="tournee-name">Tournée Nord-Est — Agent Dupont</div>
+            <div class="tournee-meta">14 conteneurs · 23 km · ETA 14h30</div>
+            <div class="progress-bar"><div class="progress-inner" style="width:78%"></div></div>
+          </div>
+          <span class="badge badge-green">En cours</span>
+        </div>
+        <div class="tournee-item">
+          <div class="tournee-num">2</div>
+          <div class="tournee-info">
+            <div class="tournee-name">Tournée Centre-Ville — Agent Martin</div>
+            <div class="tournee-meta">20 conteneurs · 18 km · Terminée 11h45</div>
+            <div class="progress-bar"><div class="progress-inner" style="width:100%"></div></div>
+          </div>
+          <span class="badge badge-blue">Terminée</span>
+        </div>
+        <div class="tournee-item">
+          <div class="tournee-num">3</div>
+          <div class="tournee-info">
+            <div class="tournee-name">Tournée Sud — Agent Leroy</div>
+            <div class="tournee-meta">11 conteneurs · 31 km · Retard 32 min</div>
+            <div class="progress-bar"><div class="progress-inner" style="width:45%;background:var(--orange-500)"></div></div>
+          </div>
+          <span class="badge badge-orange">Retard</span>
+        </div>
+        <div class="tournee-item">
+          <div class="tournee-num">4</div>
+          <div class="tournee-info">
+            <div class="tournee-name">Tournée Ouest — Agent Bernard</div>
+            <div class="tournee-meta">17 conteneurs · 27 km · Début 15h00</div>
+            <div class="progress-bar"><div class="progress-inner" style="width:0%"></div></div>
+          </div>
+          <span class="badge badge-gray">Planifiée</span>
+        </div>
+        <div class="tournee-item">
+          <div class="tournee-num">5</div>
+          <div class="tournee-info">
+            <div class="tournee-name">Tournée Est — Agent Simon</div>
+            <div class="tournee-meta">9 conteneurs · 15 km · Terminée 10h20</div>
+            <div class="progress-bar"><div class="progress-inner" style="width:100%"></div></div>
+          </div>
+          <span class="badge badge-blue">Terminée</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- VUE 2 — CARTE THERMIQUE                                -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="view" id="view-heatmap">
+    <div class="grid-3-1" style="height:calc(100vh - 140px)">
+      <div class="card" style="display:flex;flex-direction:column;">
+        <div class="card-title">
+          <div class="card-title-label">🗺 Carte Thermique — Remplissage par Zone</div>
+          <div style="display:flex;gap:8px">
+            <select style="font-size:12px;border:1px solid var(--gray-200);border-radius:6px;padding:4px 8px;">
+              <option>Temps réel</option><option>Dernière heure</option><option>Aujourd'hui</option>
+            </select>
+            <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px">Actualiser</button>
+          </div>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#dcfce7"></div>0–20%</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#86efac"></div>20–50%</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#fdba74"></div>50–75%</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#f97316"></div>75–85%</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>85–95%</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#991b1b"></div>>95%</div>
+        </div>
+        <div class="map-placeholder" style="flex:1;min-height:400px">
+          <!-- Grille simulant une carte avec zones colorées -->
+          <div style="width:100%;padding:20px">
+            <div style="text-align:center;margin-bottom:16px;font-weight:700;color:var(--gray-700)">🗺 Ville de Lyon — Vue Cartographique</div>
+            <div class="heatmap-grid">
+              <!-- Ligne 1 -->
+              <div class="heatmap-cell heat-0" data-zone="Zone A1 · 18%"></div>
+              <div class="heatmap-cell heat-1" data-zone="Zone A2 · 35%"></div>
+              <div class="heatmap-cell heat-0" data-zone="Zone A3 · 12%"></div>
+              <div class="heatmap-cell heat-2" data-zone="Zone A4 · 62%"></div>
+              <div class="heatmap-cell heat-3" data-zone="Zone A5 · 78%"></div>
+              <div class="heatmap-cell heat-4" data-zone="Zone A6 · 88%"></div>
+              <div class="heatmap-cell heat-2" data-zone="Zone A7 · 55%"></div>
+              <div class="heatmap-cell heat-1" data-zone="Zone A8 · 29%"></div>
+              <!-- Ligne 2 -->
+              <div class="heatmap-cell heat-1" data-zone="Zone B1 · 41%"></div>
+              <div class="heatmap-cell heat-4" data-zone="Zone B2 · 91% ⚠"></div>
+              <div class="heatmap-cell heat-5" data-zone="Zone B3 · 97% 🚨"></div>
+              <div class="heatmap-cell heat-3" data-zone="Zone B4 · 82%"></div>
+              <div class="heatmap-cell heat-2" data-zone="Zone B5 · 67%"></div>
+              <div class="heatmap-cell heat-1" data-zone="Zone B6 · 38%"></div>
+              <div class="heatmap-cell heat-0" data-zone="Zone B7 · 22%"></div>
+              <div class="heatmap-cell heat-2" data-zone="Zone B8 · 58%"></div>
+              <!-- Ligne 3 -->
+              <div class="heatmap-cell heat-2" data-zone="Zone C1 · 54%"></div>
+              <div class="heatmap-cell heat-3" data-zone="Zone C2 · 76%"></div>
+              <div class="heatmap-cell heat-4" data-zone="Zone C3 · 89%"></div>
+              <div class="heatmap-cell heat-2" data-zone="Zone C4 · 61%"></div>
+              <div class="heatmap-cell heat-0" data-zone="Zone C5 · 8%"></div>
+              <div class="heatmap-cell heat-1" data-zone="Zone C6 · 44%"></div>
+              <div class="heatmap-cell heat-3" data-zone="Zone C7 · 80%"></div>
+              <div class="heatmap-cell heat-4" data-zone="Zone C8 · 86%"></div>
+              <!-- Ligne 4 -->
+              <div class="heatmap-cell heat-0" data-zone="Zone D1 · 15%"></div>
+              <div class="heatmap-cell heat-1" data-zone="Zone D2 · 33%"></div>
+              <div class="heatmap-cell heat-2" data-zone="Zone D3 · 52%"></div>
+              <div class="heatmap-cell heat-1" data-zone="Zone D4 · 47%"></div>
+              <div class="heatmap-cell heat-3" data-zone="Zone D5 · 73%"></div>
+              <div class="heatmap-cell heat-2" data-zone="Zone D6 · 69%"></div>
+              <div class="heatmap-cell heat-0" data-zone="Zone D7 · 11%"></div>
+              <div class="heatmap-cell heat-1" data-zone="Zone D8 · 36%"></div>
+              <!-- Ligne 5 -->
+              <div class="heatmap-cell heat-1" data-zone="Zone E1 · 28%"></div>
+              <div class="heatmap-cell heat-0" data-zone="Zone E2 · 19%"></div>
+              <div class="heatmap-cell heat-1" data-zone="Zone E3 · 43%"></div>
+              <div class="heatmap-cell heat-2" data-zone="Zone E4 · 57%"></div>
+              <div class="heatmap-cell heat-1" data-zone="Zone E5 · 32%"></div>
+              <div class="heatmap-cell heat-0" data-zone="Zone E6 · 14%"></div>
+              <div class="heatmap-cell heat-2" data-zone="Zone E7 · 65%"></div>
+              <div class="heatmap-cell heat-1" data-zone="Zone E8 · 40%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="card">
+          <div class="card-title" style="margin-bottom:12px">🔴 Zones Critiques</div>
+          <div class="stat-row"><span class="stat-row-label">Zone B3</span><span style="font-weight:700;color:#ef4444">97% 🚨</span></div>
+          <div class="stat-row"><span class="stat-row-label">Zone B2</span><span style="font-weight:700;color:#ef4444">91%</span></div>
+          <div class="stat-row"><span class="stat-row-label">Zone C3</span><span style="font-weight:700;color:#ef4444">89%</span></div>
+          <div class="stat-row"><span class="stat-row-label">Zone A6</span><span style="font-weight:700;color:#ef4444">88%</span></div>
+          <div class="stat-row"><span class="stat-row-label">Zone C8</span><span style="font-weight:700;color:#f97316">86%</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:12px">📊 Résumé</div>
+          <div class="stat-row"><span class="stat-row-label">Zones 0–50%</span><span class="stat-row-value" style="color:var(--green-600)">18 zones</span></div>
+          <div class="stat-row"><span class="stat-row-label">Zones 50–85%</span><span class="stat-row-value" style="color:var(--orange-500)">14 zones</span></div>
+          <div class="stat-row"><span class="stat-row-label">Zones >85%</span><span class="stat-row-value" style="color:var(--red-500)">5 zones</span></div>
+          <div class="stat-row"><span class="stat-row-label">Moyenne globale</span><span class="stat-row-value">54%</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:12px">⚡ Actions rapides</div>
+          <button class="btn btn-danger" style="width:100%;margin-bottom:8px">🚛 Tournée d'urgence Zone B3</button>
+          <button class="btn btn-secondary" style="width:100%;margin-bottom:8px">📋 Rapport zones critiques</button>
+          <button class="btn btn-secondary" style="width:100%">🔔 Notifier agents de zone</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- VUE 3 — TOURNÉES                                       -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="view" id="view-tournees">
+    <div class="grid-2" style="margin-bottom:20px">
+      <div class="card">
+        <div class="card-title">➕ Créer une Tournée</div>
+        <div class="form-group">
+          <label class="form-label">Zone de collecte *</label>
+          <select class="form-select">
+            <option>Zone Nord-Est</option><option>Zone Centre</option>
+            <option>Zone Sud</option><option>Zone Ouest</option><option>Zone Est</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Agent assigné *</label>
+          <select class="form-select">
+            <option>Agent Dupont (disponible)</option>
+            <option>Agent Martin (en tournée)</option>
+            <option>Agent Leroy (disponible)</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Date de départ</label>
+            <input class="form-control" type="date" value="2026-05-04">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Heure de départ</label>
+            <input class="form-control" type="time" value="08:00">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Priorité</label>
+          <select class="form-select">
+            <option>Normale</option><option>Urgente</option><option>Planifiée</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Conteneurs sélectionnés (filtrés >70%)</label>
+          <div style="border:1px solid var(--gray-200);border-radius:8px;padding:10px;max-height:120px;overflow-y:auto;">
+            <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px">
+              <input type="checkbox" checked> #C-1024 (Nord-Est · 92%)
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px">
+              <input type="checkbox" checked> #C-0872 (Centre · 78%)
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px">
+              <input type="checkbox"> #C-0311 (Sud · 65%)
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px">
+              <input type="checkbox" checked> #C-1789 (Nord-Est · 88%)
+            </div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-secondary">Annuler</button>
+          <button class="btn btn-primary">✓ Créer la tournée</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📅 Tournées — Aujourd'hui</div>
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Zone</th><th>Agent</th><th>Progression</th><th>Statut</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>T-001</strong></td><td>Nord-Est</td><td>Dupont</td>
+              <td>
+                <div class="fill-bar" style="width:100px"><div class="fill-bar-inner fill-low" style="width:78%"></div></div>
+                <span style="font-size:11px;color:var(--gray-500)">11/14</span>
+              </td>
+              <td><span class="badge badge-green">En cours</span></td>
+              <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px">Voir</button></td>
+            </tr>
+            <tr>
+              <td><strong>T-002</strong></td><td>Centre</td><td>Martin</td>
+              <td>
+                <div class="fill-bar" style="width:100px"><div class="fill-bar-inner fill-low" style="width:100%"></div></div>
+                <span style="font-size:11px;color:var(--gray-500)">20/20</span>
+              </td>
+              <td><span class="badge badge-blue">Terminée</span></td>
+              <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px">Voir</button></td>
+            </tr>
+            <tr>
+              <td><strong>T-003</strong></td><td>Sud</td><td>Leroy</td>
+              <td>
+                <div class="fill-bar" style="width:100px"><div class="fill-bar-inner fill-mid" style="width:45%"></div></div>
+                <span style="font-size:11px;color:var(--gray-500)">5/11</span>
+              </td>
+              <td><span class="badge badge-orange">Retard</span></td>
+              <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px">Voir</button></td>
+            </tr>
+            <tr>
+              <td><strong>T-004</strong></td><td>Ouest</td><td>Bernard</td>
+              <td>
+                <div class="fill-bar" style="width:100px"><div class="fill-bar-inner" style="width:0%"></div></div>
+                <span style="font-size:11px;color:var(--gray-500)">0/17</span>
+              </td>
+              <td><span class="badge badge-gray">Planifiée</span></td>
+              <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px">Voir</button></td>
+            </tr>
+            <tr>
+              <td><strong>T-005</strong></td><td>Est</td><td>Simon</td>
+              <td>
+                <div class="fill-bar" style="width:100px"><div class="fill-bar-inner fill-low" style="width:100%"></div></div>
+                <span style="font-size:11px;color:var(--gray-500)">9/9</span>
+              </td>
+              <td><span class="badge badge-blue">Terminée</span></td>
+              <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px">Voir</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 Performance des Tournées — 7 jours</div>
+      <canvas id="chart-tournees" height="90"></canvas>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- VUE 4 — CONTENEURS                                     -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="view" id="view-conteneurs">
+    <div style="display:flex;gap:12px;margin-bottom:20px;align-items:center">
+      <input class="form-control" placeholder="🔍 Rechercher par ID, zone, type..." style="max-width:300px">
+      <select class="form-select" style="max-width:160px">
+        <option>Toutes les zones</option><option>Nord-Est</option><option>Centre</option>
+        <option>Sud</option><option>Ouest</option><option>Est</option>
+      </select>
+      <select class="form-select" style="max-width:160px">
+        <option>Tous les statuts</option><option>Critique (>85%)</option>
+        <option>Élevé (50-85%)</option><option>Normal (<50%)</option>
+      </select>
+      <select class="form-select" style="max-width:160px">
+        <option>Tous types</option><option>Recyclable</option><option>Organique</option>
+        <option>Général</option><option>Verre</option>
+      </select>
+      <button class="btn btn-primary" style="margin-left:auto">+ Ajouter conteneur</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-label">🗑 Conteneurs (1 847 au total)</div>
+        <div style="display:flex;gap:8px">
+          <span class="badge badge-red">● 43 critiques</span>
+          <span class="badge badge-orange">● 312 élevés</span>
+          <span class="badge badge-green">● 1492 normaux</span>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Type</th><th>Zone</th><th>Niveau</th><th>Capacité</th><th>Batterie</th><th>Dernier vidage</th><th>Statut</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>#C-1024</strong></td>
+            <td><span class="badge badge-blue">♻ Recyclable</span></td>
+            <td>Nord-Est</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="fill-bar" style="width:70px"><div class="fill-bar-inner fill-high" style="width:92%"></div></div>
+                <strong style="color:#ef4444">92%</strong>
+              </div>
+            </td>
+            <td style="color:var(--gray-500);font-size:12px">500 L</td>
+            <td style="font-size:12px">🔋 78%</td>
+            <td style="color:var(--gray-500);font-size:12px">Il y a 6 jours</td>
+            <td><span class="badge badge-red">Critique</span></td>
+            <td>
+              <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px">Voir</button>
+              <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px;margin-left:4px">Modifier</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>#C-0872</strong></td>
+            <td><span class="badge badge-green">🌿 Organique</span></td>
+            <td>Centre</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="fill-bar" style="width:70px"><div class="fill-bar-inner fill-mid" style="width:78%"></div></div>
+                <strong style="color:#f97316">78%</strong>
+              </div>
+            </td>
+            <td style="color:var(--gray-500);font-size:12px">750 L</td>
+            <td style="font-size:12px">🔋 91%</td>
+            <td style="color:var(--gray-500);font-size:12px">Il y a 3 jours</td>
+            <td><span class="badge badge-orange">Élevé</span></td>
+            <td>
+              <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px">Voir</button>
+              <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px;margin-left:4px">Modifier</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>#C-1456</strong></td>
+            <td><span class="badge badge-gray">🗑 Général</span></td>
+            <td>Ouest</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="fill-bar" style="width:70px"><div class="fill-bar-inner fill-low" style="width:34%"></div></div>
+                <strong style="color:#22c55e">34%</strong>
+              </div>
+            </td>
+            <td style="color:var(--gray-500);font-size:12px">1000 L</td>
+            <td style="font-size:12px">🔋 54%</td>
+            <td style="color:var(--gray-500);font-size:12px">Aujourd'hui</td>
+            <td><span class="badge badge-green">Normal</span></td>
+            <td>
+              <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px">Voir</button>
+              <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px;margin-left:4px">Modifier</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>#C-0491</strong></td>
+            <td><span class="badge badge-gray">🍶 Verre</span></td>
+            <td>Est</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="fill-bar" style="width:70px"><div class="fill-bar-inner fill-low" style="width:18%"></div></div>
+                <strong style="color:#22c55e">18%</strong>
+              </div>
+            </td>
+            <td style="color:var(--gray-500);font-size:12px">300 L</td>
+            <td style="font-size:12px;color:#f97316">🪫 12%</td>
+            <td style="color:var(--gray-500);font-size:12px">Hier</td>
+            <td><span class="badge badge-orange">Batterie faible</span></td>
+            <td>
+              <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px">Voir</button>
+              <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px;margin-left:4px">Modifier</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>#C-2091</strong></td>
+            <td><span class="badge badge-blue">♻ Recyclable</span></td>
+            <td>Est</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="fill-bar" style="width:70px"><div class="fill-bar-inner fill-low" style="width:18%"></div></div>
+                <strong style="color:#22c55e">18%</strong>
+              </div>
+            </td>
+            <td style="color:var(--gray-500);font-size:12px">500 L</td>
+            <td style="font-size:12px">🔋 88%</td>
+            <td style="color:var(--gray-500);font-size:12px">Aujourd'hui</td>
+            <td><span class="badge badge-green">Normal</span></td>
+            <td>
+              <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px">Voir</button>
+              <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px;margin-left:4px">Modifier</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;padding-top:12px;border-top:1px solid var(--gray-100)">
+        <span style="font-size:12px;color:var(--gray-500)">Affichage 1–5 sur 1 847</span>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px">← Préc.</button>
+          <button class="btn btn-primary" style="padding:4px 10px;font-size:12px">1</button>
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px">2</button>
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px">3</button>
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px">... 370</button>
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px">Suiv. →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- VUE 5 — ANALYTICS                                      -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="view" id="view-analytics">
+    <div class="kpi-grid" style="margin-bottom:24px">
+      <div class="kpi-card green">
+        <div class="kpi-label">Collectes ce mois</div>
+        <div class="kpi-value">247</div>
+        <div class="kpi-trend up">↑ +18% vs mois dernier</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-label">Km parcourus</div>
+        <div class="kpi-value">3 841</div>
+        <div class="kpi-trend up">↓ -12% optimisation</div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label">Signalements traités</div>
+        <div class="kpi-value">189</div>
+        <div class="kpi-trend up">94% taux résolution</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">CO₂ économisé</div>
+        <div class="kpi-value">2.4 T</div>
+        <div class="kpi-trend up">↑ grâce à l'optimisation</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">📊 Remplissage moyen par type de conteneur</div>
+        <canvas id="chart-types" height="180"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">📅 Signalements par semaine</div>
+        <canvas id="chart-signalements" height="180"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:20px">
+      <div class="card">
+        <div class="card-title">🏆 Performance des Agents</div>
+        <table>
+          <thead>
+            <tr><th>Agent</th><th>Collectes</th><th>Km</th><th>Ponctualité</th><th>Score</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Dupont A.</td><td>52</td><td>847 km</td>
+              <td><div class="fill-bar" style="width:80px"><div class="fill-bar-inner fill-low" style="width:96%"></div></div></td>
+              <td><span class="badge badge-green">96%</span></td>
+            </tr>
+            <tr>
+              <td>Martin B.</td><td>48</td><td>712 km</td>
+              <td><div class="fill-bar" style="width:80px"><div class="fill-bar-inner fill-low" style="width:91%"></div></div></td>
+              <td><span class="badge badge-green">91%</span></td>
+            </tr>
+            <tr>
+              <td>Leroy C.</td><td>41</td><td>923 km</td>
+              <td><div class="fill-bar" style="width:80px"><div class="fill-bar-inner fill-mid" style="width:74%"></div></div></td>
+              <td><span class="badge badge-orange">74%</span></td>
+            </tr>
+            <tr>
+              <td>Bernard D.</td><td>56</td><td>1024 km</td>
+              <td><div class="fill-bar" style="width:80px"><div class="fill-bar-inner fill-low" style="width:88%"></div></div></td>
+              <td><span class="badge badge-green">88%</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">🗑 Répartition des déchets collectés</div>
+        <canvas id="chart-dechets" height="180"></canvas>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// Navigation
+const views = { overview:'Vue d\'ensemble', heatmap:'Carte Thermique', tournees:'Tournées', conteneurs:'Conteneurs', analytics:'Analytics' };
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick') === `showView('${name}')`) n.classList.add('active');
+  });
+  document.getElementById('page-title').textContent = views[name] || name;
+  if (name === 'analytics') initAnalyticsCharts();
+  if (name === 'tournees') initTourneeChart();
+}
+
+// Chart remplissage
+const ctx1 = document.getElementById('chart-fill');
+new Chart(ctx1, {
+  type: 'line',
+  data: {
+    labels: ['28 Avr', '29 Avr', '30 Avr', '1 Mai', '2 Mai', '3 Mai', '4 Mai'],
+    datasets: [{
+      label: 'Remplissage moyen (%)',
+      data: [48, 52, 61, 55, 67, 71, 54],
+      borderColor: '#22c55e', backgroundColor: '#22c55e15',
+      tension: 0.4, fill: true, pointBackgroundColor: '#22c55e', pointRadius: 4
+    }, {
+      label: 'Seuil alerte (85%)',
+      data: [85,85,85,85,85,85,85],
+      borderColor: '#ef4444', borderDash: [5,5], pointRadius: 0, fill: false
+    }]
+  },
+  options: { plugins: { legend: { display: true, position: 'bottom' } }, scales: { y: { min: 0, max: 100 } }, responsive: true }
+});
+
+let analyticsInit = false;
+function initAnalyticsCharts() {
+  if (analyticsInit) return; analyticsInit = true;
+
+  new Chart(document.getElementById('chart-types'), {
+    type: 'bar',
+    data: {
+      labels: ['Recyclable', 'Organique', 'Général', 'Verre', 'Papier'],
+      datasets: [{ label: 'Remplissage moyen (%)', data: [62, 78, 54, 41, 67],
+        backgroundColor: ['#22c55e','#84cc16','#f97316','#3b82f6','#8b5cf6'] }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } }, responsive: true }
+  });
+
+  new Chart(document.getElementById('chart-signalements'), {
+    type: 'bar',
+    data: {
+      labels: ['S17', 'S18', 'S19', 'S20', 'S21 (en cours)'],
+      datasets: [
+        { label: 'Ouverts', data: [34, 41, 28, 37, 27], backgroundColor: '#f97316' },
+        { label: 'Résolus', data: [31, 38, 26, 35, 12], backgroundColor: '#22c55e' }
+      ]
+    },
+    options: { plugins: { legend: { position: 'bottom' } }, responsive: true }
+  });
+
+  new Chart(document.getElementById('chart-dechets'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Recyclable', 'Organique', 'Général', 'Verre', 'Papier'],
+      datasets: [{ data: [38, 24, 18, 11, 9],
+        backgroundColor: ['#22c55e','#84cc16','#f97316','#3b82f6','#8b5cf6'] }]
+    },
+    options: { plugins: { legend: { position: 'right' } }, responsive: true }
+  });
+}
+
+let tourneeInit = false;
+function initTourneeChart() {
+  if (tourneeInit) return; tourneeInit = true;
+  new Chart(document.getElementById('chart-tournees'), {
+    type: 'line',
+    data: {
+      labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+      datasets: [
+        { label: 'Tournées planifiées', data: [12,14,11,13,15,8,12], borderColor:'#3b82f6', tension:.4, pointRadius:4, backgroundColor:'#3b82f615', fill:true },
+        { label: 'Tournées terminées', data: [12,13,11,12,14,8,9], borderColor:'#22c55e', tension:.4, pointRadius:4 },
+        { label: 'Retards', data: [0,1,0,1,1,0,3], borderColor:'#ef4444', tension:.4, pointRadius:4 }
+      ]
+    },
+    options: { plugins: { legend: { position:'bottom' } }, responsive: true }
+  });
+}
+</script>
+</body>
+</html>

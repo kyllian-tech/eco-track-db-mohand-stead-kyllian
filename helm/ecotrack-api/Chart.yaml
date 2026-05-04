@@ -1,0 +1,22 @@
+apiVersion: v2
+name: ecotrack-api
+description: EcoTrack REST API — Helm Chart for Kubernetes deployment
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+keywords:
+  - ecotrack
+  - api
+  - nodejs
+home: https://ecotrack.com
+sources:
+  - https://gitlab.com/ecotrack/ecotrack-api
+maintainers:
+  - name: Mohand
+  - name: Stead
+  - name: Kyllian
+dependencies:
+  - name: redis
+    version: "18.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

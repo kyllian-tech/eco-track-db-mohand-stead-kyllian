@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>EcoTrack — App Mobile Citoyen</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --green: #22c55e; --green-d: #16a34a; --green-l: #dcfce7;
+    --orange: #f97316; --red: #ef4444; --blue: #3b82f6;
+    --gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;
+    --gray-400:#9ca3af;--gray-500:#6b7280;--gray-600:#4b5563;
+    --gray-700:#374151;--gray-800:#1f2937;--gray-900:#111827;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    background: #1a1a2e;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; font-family: 'Segoe UI', system-ui, sans-serif;
+    gap: 32px; flex-wrap: wrap; padding: 40px 20px;
+  }
+
+  /* PHONE FRAME */
+  .phone {
+    width: 375px; height: 812px;
+    background: white; border-radius: 44px;
+    box-shadow: 0 0 0 12px #111, 0 0 0 14px #333, 0 40px 80px rgba(0,0,0,.6);
+    overflow: hidden; position: relative; display: flex; flex-direction: column;
+    flex-shrink: 0;
+  }
+  .phone-label {
+    text-align: center; color: white; font-size: 13px; margin-top: 12px;
+    font-weight: 600; opacity: .7; letter-spacing: .05em; text-transform: uppercase;
+  }
+
+  /* STATUS BAR */
+  .status-bar {
+    background: var(--screen-bg, white); padding: 14px 20px 8px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; font-weight: 600; flex-shrink: 0;
+  }
+  .status-time { font-size: 15px; font-weight: 700; }
+  .status-icons { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+
+  /* SCREENS */
+  .screen { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .screen.active { display: flex; }
+
+  /* HOME / CARTE */
+  .map-bg {
+    flex: 1; background: linear-gradient(160deg, #e0f2fe 0%, #bae6fd 40%, #7dd3fc 100%);
+    position: relative; overflow: hidden;
+  }
+  /* Grille de rue simulée */
+  .map-bg::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.3) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .map-pin {
+    position: absolute; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center;
+    transition: transform .15s;
+  }
+  .map-pin:hover { transform: scale(1.2); }
+  .map-pin .dot {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 3px solid white; display: flex; align-items: center;
+    justify-content: center; font-size: 13px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  }
+  .map-pin .tail {
+    width: 3px; height: 8px; border-radius: 0 0 2px 2px;
+  }
+  .map-btn {
+    position: absolute; background: white; border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.15); padding: 10px 16px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .fab {
+    position: absolute; bottom: 20px; right: 20px;
+    width: 56px; height: 56px; background: var(--green);
+    border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 24px;
+    box-shadow: 0 4px 16px rgba(34,197,94,.4);
+    cursor: pointer; transition: transform .15s;
+  }
+  .fab:hover { transform: scale(1.05); }
+  .user-pos {
+    position: absolute; width: 20px; height: 20px;
+    background: var(--blue); border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 0 0 8px rgba(59,130,246,.2);
+  }
+
+  /* BOTTOM NAV */
+  .bottom-nav {
+    background: white; border-top: 1px solid var(--gray-100);
+    display: flex; padding: 8px 0 20px; flex-shrink: 0;
+  }
+  .nav-tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    gap: 3px; cursor: pointer; padding: 4px 0;
+    font-size: 10px; color: var(--gray-400); font-weight: 500;
+    transition: color .15s;
+  }
+  .nav-tab.active { color: var(--green); }
+  .nav-tab .tab-icon { font-size: 20px; }
+  .nav-tab .tab-dot {
+    width: 4px; height: 4px; background: var(--green);
+    border-radius: 50%; position: absolute; top: -2px;
+  }
+
+  /* TOP HEADER */
+  .top-header {
+    background: white; padding: 12px 20px;
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--gray-100); flex-shrink: 0;
+  }
+  .top-back { font-size: 20px; cursor: pointer; }
+  .top-title { font-size: 17px; font-weight: 700; flex: 1; }
+  .top-action { font-size: 14px; color: var(--green); font-weight: 600; cursor: pointer; }
+
+  /* CONTENT SCROLL */
+  .scroll-content { flex: 1; overflow-y: auto; padding: 0; }
+
+  /* FORM CARD */
+  .form-card { background: white; margin: 16px; border-radius: 16px;
+    padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+  .form-card + .form-card { margin-top: 0; }
+  .form-section-title { font-size: 13px; font-weight: 700; color: var(--gray-500);
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; }
+  .field { margin-bottom: 16px; }
+  .field label { font-size: 13px; font-weight: 600; color: var(--gray-700); display: block; margin-bottom: 6px; }
+  .field input, .field textarea, .field select {
+    width: 100%; padding: 12px 14px; border: 1.5px solid var(--gray-200);
+    border-radius: 12px; font-size: 14px; outline: none; font-family: inherit;
+    transition: border-color .15s; background: var(--gray-50);
+  }
+  .field input:focus, .field textarea:focus { border-color: var(--green); background: white; }
+  .field textarea { resize: none; }
+
+  /* TYPE GRID */
+  .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .type-chip {
+    padding: 10px; border: 2px solid var(--gray-200); border-radius: 12px;
+    text-align: center; cursor: pointer; font-size: 13px; font-weight: 600;
+    color: var(--gray-600); transition: all .15s; background: var(--gray-50);
+  }
+  .type-chip.selected { border-color: var(--green); background: var(--green-l); color: var(--green-d); }
+  .type-chip .chip-icon { font-size: 22px; display: block; margin-bottom: 4px; }
+
+  /* PHOTO UPLOAD */
+  .photo-upload {
+    border: 2px dashed var(--gray-200); border-radius: 16px;
+    padding: 28px; text-align: center; cursor: pointer;
+    transition: border-color .15s; background: var(--gray-50);
+  }
+  .photo-upload:hover { border-color: var(--green); }
+  .photo-upload .pu-icon { font-size: 36px; margin-bottom: 8px; }
+  .photo-upload .pu-text { font-size: 14px; font-weight: 600; color: var(--gray-600); }
+  .photo-upload .pu-sub { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+  .photo-row { display: flex; gap: 8px; margin-top: 12px; }
+  .photo-thumb { width: 72px; height: 72px; background: var(--gray-200); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+    overflow: hidden; position: relative; }
+  .photo-thumb .del { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,.5);
+    color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 10px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+  /* SUBMIT BTN */
+  .submit-btn {
+    width: calc(100% - 32px); margin: 0 16px 24px;
+    padding: 16px; background: var(--green); color: white;
+    border: none; border-radius: 16px; font-size: 16px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 4px 16px rgba(34,197,94,.35); transition: all .15s;
+  }
+  .submit-btn:hover { background: var(--green-d); transform: translateY(-1px); }
+
+  /* GAMIFICATION */
+  .points-banner {
+    background: linear-gradient(135deg, var(--green-d), #166534);
+    margin: 16px; border-radius: 20px; padding: 20px;
+    color: white; display: flex; align-items: center; gap: 16px;
+  }
+  .points-num { font-size: 40px; font-weight: 900; line-height: 1; }
+  .points-label { font-size: 13px; opacity: .8; }
+  .points-rank { margin-left: auto; text-align: center; }
+  .rank-num { font-size: 28px; font-weight: 900; }
+  .rank-label { font-size: 11px; opacity: .7; }
+
+  /* BADGE GRID */
+  .badge-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 0 16px 16px; }
+  .badge-card {
+    background: white; border-radius: 16px; padding: 14px 10px;
+    text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    border: 2px solid transparent; transition: all .15s;
+  }
+  .badge-card.unlocked { border-color: var(--green); }
+  .badge-card.locked { opacity: .5; filter: grayscale(1); }
+  .badge-icon { font-size: 30px; margin-bottom: 6px; }
+  .badge-name { font-size: 11px; font-weight: 700; color: var(--gray-700); }
+  .badge-pts { font-size: 10px; color: var(--gray-400); margin-top: 2px; }
+
+  /* HISTORY LIST */
+  .history-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; border-bottom: 1px solid var(--gray-100);
+  }
+  .hist-icon { width: 40px; height: 40px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+  .hist-info { flex: 1; }
+  .hist-title { font-size: 14px; font-weight: 600; color: var(--gray-800); }
+  .hist-date { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+  .hist-pts { font-size: 14px; font-weight: 700; color: var(--green); }
+
+  /* PROFIL */
+  .profile-header {
+    background: linear-gradient(160deg, #166534, #15803d);
+    padding: 30px 20px 50px; text-align: center; color: white; flex-shrink: 0;
+  }
+  .profile-avatar { width: 80px; height: 80px; background: rgba(255,255,255,.2);
+    border-radius: 50%; margin: 0 auto 12px; display: flex;
+    align-items: center; justify-content: center; font-size: 36px;
+    border: 3px solid rgba(255,255,255,.4); }
+  .profile-name { font-size: 20px; font-weight: 800; }
+  .profile-since { font-size: 13px; opacity: .7; margin-top: 4px; }
+  .profile-stats { display: flex; gap: 24px; justify-content: center; margin-top: 16px; }
+  .pstat { text-align: center; }
+  .pstat-val { font-size: 22px; font-weight: 800; }
+  .pstat-label { font-size: 11px; opacity: .7; }
+
+  .profile-card {
+    background: white; border-radius: 20px; margin: -20px 16px 16px;
+    padding: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.1); position: relative; z-index: 1;
+  }
+  .menu-item {
+    display: flex; align-items: center; gap: 12px; padding: 14px 0;
+    border-bottom: 1px solid var(--gray-100); cursor: pointer;
+  }
+  .menu-item:last-child { border-bottom: none; }
+  .menu-item .mi-icon { width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .menu-item .mi-label { font-size: 14px; font-weight: 600; color: var(--gray-800); flex: 1; }
+  .menu-item .mi-arrow { color: var(--gray-300); font-size: 18px; }
+
+  /* NOTIF BADGE */
+  .notif-badge {
+    position: absolute; top: -4px; right: -4px;
+    background: var(--red); color: white; font-size: 9px;
+    width: 16px; height: 16px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; border: 2px solid white;
+  }
+
+  /* SUCCESS SCREEN */
+  .success-screen {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 40px 24px; text-align: center;
+  }
+  .success-icon { font-size: 80px; margin-bottom: 20px; animation: pop .4s ease; }
+  @keyframes pop { 0%{transform:scale(0)} 80%{transform:scale(1.1)} 100%{transform:scale(1)} }
+  .success-title { font-size: 24px; font-weight: 800; color: var(--gray-900); margin-bottom: 8px; }
+  .success-sub { font-size: 15px; color: var(--gray-500); line-height: 1.5; margin-bottom: 24px; }
+  .points-earned { background: var(--green-l); border-radius: 16px;
+    padding: 16px 24px; margin-bottom: 24px; }
+  .pe-label { font-size: 13px; color: var(--green-d); margin-bottom: 4px; }
+  .pe-value { font-size: 32px; font-weight: 900; color: var(--green-d); }
+
+  .screen-hint { color: rgba(255,255,255,.6); font-size: 11px; text-align: center; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<!-- ÉCRAN 1 — CARTE / ACCUEIL -->
+<div>
+  <div class="phone">
+    <!-- Status bar -->
+    <div class="status-bar">
+      <span class="status-time">9:41</span>
+      <div class="status-icons">📶 🔋</div>
+    </div>
+
+    <!-- Screen: Carte -->
+    <div class="screen active" id="s1-map">
+      <!-- Search bar -->
+      <div style="padding:8px 16px;background:white;border-bottom:1px solid var(--gray-100)">
+        <div style="background:var(--gray-100);border-radius:12px;padding:10px 14px;font-size:14px;color:var(--gray-400);display:flex;align-items:center;gap:8px">
+          🔍 <span>Rechercher une zone, un conteneur...</span>
+        </div>
+      </div>
+
+      <!-- Map -->
+      <div class="map-bg" style="position:relative">
+        <!-- Rue simulée -->
+        <div style="position:absolute;top:50%;left:0;right:0;height:30px;background:rgba(255,255,255,.5);transform:translateY(-50%)"></div>
+        <div style="position:absolute;left:40%;top:0;bottom:0;width:20px;background:rgba(255,255,255,.5)"></div>
+        <div style="position:absolute;top:30%;left:0;right:0;height:20px;background:rgba(255,255,255,.4)"></div>
+
+        <!-- Pins conteneurs -->
+        <div class="map-pin" style="top:25%;left:20%">
+          <div class="dot" style="background:#22c55e">♻</div>
+          <div class="tail" style="background:#22c55e"></div>
+        </div>
+        <div class="map-pin" style="top:40%;left:55%">
+          <div class="dot" style="background:#ef4444">🗑</div>
+          <div class="tail" style="background:#ef4444"></div>
+        </div>
+        <div class="map-pin" style="top:60%;left:25%">
+          <div class="dot" style="background:#f97316">🗑</div>
+          <div class="tail" style="background:#f97316"></div>
+        </div>
+        <div class="map-pin" style="top:55%;left:65%">
+          <div class="dot" style="background:#22c55e">🍶</div>
+          <div class="tail" style="background:#22c55e"></div>
+        </div>
+        <div class="map-pin" style="top:20%;left:70%">
+          <div class="dot" style="background:#22c55e">♻</div>
+          <div class="tail" style="background:#22c55e"></div>
+        </div>
+
+        <!-- Position utilisateur -->
+        <div class="user-pos" style="position:absolute;top:48%;left:43%"></div>
+
+        <!-- Popup conteneur -->
+        <div style="position:absolute;top:32%;left:44%;background:white;border-radius:14px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,.15);font-size:12px;width:160px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">🗑 Conteneur #C-1024</div>
+          <div style="color:var(--gray-500);margin-bottom:6px">Zone Nord-Est · Recyclable</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <div style="flex:1;height:6px;background:var(--gray-100);border-radius:3px">
+              <div style="width:92%;height:100%;background:#ef4444;border-radius:3px"></div>
+            </div>
+            <span style="font-weight:700;color:#ef4444">92%</span>
+          </div>
+          <button style="width:100%;background:var(--orange);color:white;border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">⚠ Signaler</button>
+        </div>
+
+        <!-- Légende -->
+        <div style="position:absolute;top:12px;right:12px;background:white;border-radius:12px;padding:10px 12px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.1)">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><div style="width:10px;height:10px;background:#22c55e;border-radius:50%"></div>Normal</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><div style="width:10px;height:10px;background:#f97316;border-radius:50%"></div>Élevé</div>
+          <div style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;background:#ef4444;border-radius:50%"></div>Critique</div>
+        </div>
+
+        <!-- Zoom -->
+        <div style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:white;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)">
+          <div style="padding:8px 12px;font-size:16px;cursor:pointer;border-bottom:1px solid var(--gray-100)">+</div>
+          <div style="padding:8px 12px;font-size:16px;cursor:pointer">−</div>
+        </div>
+
+        <!-- FAB Signaler -->
+        <div class="fab">📋</div>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="bottom-nav">
+        <div class="nav-tab active"><span class="tab-icon">🗺</span>Carte</div>
+        <div class="nav-tab"><span class="tab-icon">📋</span>Signaler</div>
+        <div class="nav-tab" style="position:relative">
+          <span class="tab-icon">🏆</span>Points
+          <div class="tab-dot" style="position:static;width:6px;height:6px;margin:0 auto"></div>
+        </div>
+        <div class="nav-tab"><span class="tab-icon">👤</span>Profil</div>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">1 — Carte en temps réel</div>
+</div>
+
+<!-- ÉCRAN 2 — SIGNALEMENT -->
+<div>
+  <div class="phone">
+    <div class="status-bar">
+      <span class="status-time">9:41</span>
+      <div class="status-icons">📶 🔋</div>
+    </div>
+
+    <div class="screen active">
+      <div class="top-header">
+        <div class="top-back">‹</div>
+        <div class="top-title">Nouveau Signalement</div>
+        <div class="top-action">Annuler</div>
+      </div>
+
+      <div class="scroll-content">
+        <!-- Type d'incident -->
+        <div class="form-card">
+          <div class="form-section-title">Type de problème *</div>
+          <div class="type-grid">
+            <div class="type-chip selected">
+              <span class="chip-icon">💥</span>Débordement
+            </div>
+            <div class="type-chip">
+              <span class="chip-icon">🔨</span>Dommage
+            </div>
+            <div class="type-chip">
+              <span class="chip-icon">🔥</span>Incendie
+            </div>
+            <div class="type-chip">
+              <span class="chip-icon">🎨</span>Vandalisme
+            </div>
+            <div class="type-chip" style="grid-column:span 2">
+              <span class="chip-icon">❓</span>Autre
+            </div>
+          </div>
+        </div>
+
+        <!-- Localisation -->
+        <div class="form-card">
+          <div class="form-section-title">Localisation</div>
+          <div style="background:linear-gradient(135deg,#e0f2fe,#bae6fd);border-radius:12px;height:100px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;position:relative;overflow:hidden">
+            <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.3)1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.3)1px,transparent 1px);background-size:20px 20px"></div>
+            <div style="background:var(--blue);width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 0 0 6px rgba(59,130,246,.2)"></div>
+          </div>
+          <div style="background:var(--gray-50);border-radius:12px;padding:12px;display:flex;align-items:center;gap:10px">
+            <span style="font-size:20px">📍</span>
+            <div>
+              <div style="font-size:13px;font-weight:600">12 Rue de la République</div>
+              <div style="font-size:12px;color:var(--gray-400)">69001 Lyon · À 45m de vous</div>
+            </div>
+            <span style="margin-left:auto;color:var(--green);font-weight:600;font-size:13px">Modifier</span>
+          </div>
+          <div class="field" style="margin-top:12px;margin-bottom:0">
+            <label>Conteneur concerné (optionnel)</label>
+            <select style="width:100%;padding:12px 14px;border:1.5px solid var(--gray-200);border-radius:12px;font-size:14px;background:var(--gray-50)">
+              <option>Sélectionner un conteneur proche...</option>
+              <option selected>#C-1024 · Recyclable · 92% (le plus proche)</option>
+              <option>#C-0872 · Organique · 78%</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="form-card">
+          <div class="form-section-title">Description</div>
+          <div class="field" style="margin-bottom:0">
+            <textarea rows="4" placeholder="Décrivez le problème constaté... (optionnel)">Le conteneur déborde complètement, des déchets jonchent le sol autour.</textarea>
+          </div>
+        </div>
+
+        <!-- Photos -->
+        <div class="form-card">
+          <div class="form-section-title">Photos</div>
+          <div class="photo-upload">
+            <div class="pu-icon">📷</div>
+            <div class="pu-text">Ajouter des photos</div>
+            <div class="pu-sub">Galerie ou appareil photo</div>
+          </div>
+          <div class="photo-row">
+            <div class="photo-thumb">🗑<div class="del">✕</div></div>
+            <div class="photo-thumb">📸<div class="del">✕</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit -->
+      <button class="submit-btn">
+        📤 Envoyer le signalement (+50 pts)
+      </button>
+    </div>
+  </div>
+  <div class="phone-label">2 — Formulaire Signalement</div>
+</div>
+
+<!-- ÉCRAN 3 — CONFIRMATION -->
+<div>
+  <div class="phone">
+    <div class="status-bar">
+      <span class="status-time">9:43</span>
+      <div class="status-icons">📶 🔋</div>
+    </div>
+
+    <div class="screen active" style="background:var(--gray-50)">
+      <div class="success-screen">
+        <div class="success-icon">✅</div>
+        <div class="success-title">Signalement envoyé !</div>
+        <div class="success-sub">Votre signalement a été transmis aux équipes. Vous serez notifié dès sa prise en charge.</div>
+
+        <div class="points-earned">
+          <div class="pe-label">🌟 Points gagnés</div>
+          <div class="pe-value">+50 pts</div>
+        </div>
+
+        <div style="background:white;border-radius:16px;padding:16px;width:100%;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
+            <span style="color:var(--gray-500)">Référence</span>
+            <span style="font-weight:700">#SIG-2847</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
+            <span style="color:var(--gray-500)">Type</span>
+            <span style="font-weight:700">Débordement</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px">
+            <span style="color:var(--gray-500)">Statut</span>
+            <span style="background:#fef9c3;color:#854d0e;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">En attente</span>
+          </div>
+        </div>
+
+        <button style="width:100%;padding:16px;background:var(--green);color:white;border:none;border-radius:16px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px">
+          Retour à la carte
+        </button>
+        <button style="width:100%;padding:14px;background:white;color:var(--gray-600);border:1.5px solid var(--gray-200);border-radius:16px;font-size:15px;font-weight:600;cursor:pointer">
+          Voir mes signalements
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">3 — Confirmation & Points</div>
+</div>
+
+<!-- ÉCRAN 4 — GAMIFICATION -->
+<div>
+  <div class="phone">
+    <div class="status-bar" style="background:#166534;color:white">
+      <span class="status-time">9:41</span>
+      <div class="status-icons">📶 🔋</div>
+    </div>
+
+    <div class="screen active" style="background:var(--gray-50)">
+      <!-- Points banner -->
+      <div class="profile-header" style="padding-bottom:20px">
+        <div style="font-size:17px;font-weight:700;margin-bottom:16px;text-align:left">🏆 Mes Points</div>
+        <div class="points-banner" style="margin:0">
+          <div>
+            <div class="points-num">2 840</div>
+            <div class="points-label">points EcoTrack</div>
+            <div style="margin-top:8px;font-size:12px;opacity:.8">↑ +230 cette semaine</div>
+          </div>
+          <div class="points-rank">
+            <div class="rank-num">#12</div>
+            <div class="rank-label">Classement</div>
+            <div style="font-size:10px;opacity:.7;margin-top:2px">sur 1 847</div>
+          </div>
+        </div>
+
+        <!-- Progress to next badge -->
+        <div style="margin-top:14px;background:rgba(255,255,255,.1);border-radius:12px;padding:12px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px">
+            <span>Prochain badge : Champion Éco</span>
+            <span style="font-weight:700">2840/3000</span>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,.2);border-radius:3px">
+            <div style="width:94%;height:100%;background:white;border-radius:3px"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scroll-content">
+        <!-- Badges -->
+        <div style="padding:16px 16px 8px">
+          <div style="font-size:15px;font-weight:700;color:var(--gray-800)">Mes Badges</div>
+        </div>
+        <div class="badge-grid">
+          <div class="badge-card unlocked">
+            <div class="badge-icon">🌱</div>
+            <div class="badge-name">Débutant Écolo</div>
+            <div class="badge-pts">1er signalement</div>
+          </div>
+          <div class="badge-card unlocked">
+            <div class="badge-icon">♻</div>
+            <div class="badge-name">Gardien des Rues</div>
+            <div class="badge-pts">10 signalements</div>
+          </div>
+          <div class="badge-card unlocked">
+            <div class="badge-icon">⭐</div>
+            <div class="badge-name">Éco-Citoyen</div>
+            <div class="badge-pts">500 pts</div>
+          </div>
+          <div class="badge-card unlocked">
+            <div class="badge-icon">🔥</div>
+            <div class="badge-name">En Série</div>
+            <div class="badge-pts">7 jours consécutifs</div>
+          </div>
+          <div class="badge-card locked">
+            <div class="badge-icon">🏆</div>
+            <div class="badge-name">Champion Éco</div>
+            <div class="badge-pts">3000 pts</div>
+          </div>
+          <div class="badge-card locked">
+            <div class="badge-icon">💎</div>
+            <div class="badge-name">Légendaire</div>
+            <div class="badge-pts">Top 5</div>
+          </div>
+        </div>
+
+        <!-- Historique -->
+        <div style="padding:8px 16px 8px">
+          <div style="font-size:15px;font-weight:700;color:var(--gray-800)">Historique des points</div>
+        </div>
+        <div class="history-item">
+          <div class="hist-icon" style="background:#dcfce7">📋</div>
+          <div class="hist-info">
+            <div class="hist-title">Signalement validé</div>
+            <div class="hist-date">Aujourd'hui · 09:43</div>
+          </div>
+          <div class="hist-pts">+50</div>
+        </div>
+        <div class="history-item">
+          <div class="hist-icon" style="background:#dbeafe">🔥</div>
+          <div class="hist-info">
+            <div class="hist-title">Bonus série 7 jours</div>
+            <div class="hist-date">Hier · 08:12</div>
+          </div>
+          <div class="hist-pts">+100</div>
+        </div>
+        <div class="history-item">
+          <div class="hist-icon" style="background:#dcfce7">📋</div>
+          <div class="hist-info">
+            <div class="hist-title">Signalement validé</div>
+            <div class="hist-date">Hier · 14:30</div>
+          </div>
+          <div class="hist-pts">+50</div>
+        </div>
+        <div class="history-item">
+          <div class="hist-icon" style="background:#fef9c3">⭐</div>
+          <div class="hist-info">
+            <div class="hist-title">Badge "Éco-Citoyen" débloqué</div>
+            <div class="hist-date">Il y a 3 jours</div>
+          </div>
+          <div class="hist-pts">+30</div>
+        </div>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="bottom-nav">
+        <div class="nav-tab"><span class="tab-icon">🗺</span>Carte</div>
+        <div class="nav-tab"><span class="tab-icon">📋</span>Signaler</div>
+        <div class="nav-tab active"><span class="tab-icon">🏆</span>Points</div>
+        <div class="nav-tab"><span class="tab-icon">👤</span>Profil</div>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">4 — Gamification & Badges</div>
+</div>
+
+<!-- ÉCRAN 5 — PROFIL -->
+<div>
+  <div class="phone">
+    <div class="status-bar" style="background:#166534;color:white">
+      <span class="status-time">9:41</span>
+      <div class="status-icons">📶 🔋</div>
+    </div>
+
+    <div class="screen active" style="background:var(--gray-50)">
+      <div class="profile-header">
+        <div class="profile-avatar">👤</div>
+        <div class="profile-name">Marie Dupont</div>
+        <div class="profile-since">Membre depuis Mars 2026</div>
+        <div class="profile-stats">
+          <div class="pstat">
+            <div class="pstat-val">2 840</div>
+            <div class="pstat-label">Points</div>
+          </div>
+          <div class="pstat">
+            <div class="pstat-val">23</div>
+            <div class="pstat-label">Signalements</div>
+          </div>
+          <div class="pstat">
+            <div class="pstat-val">4</div>
+            <div class="pstat-label">Badges</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scroll-content">
+        <div class="profile-card">
+          <div style="font-size:13px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Mon compte</div>
+          <div class="menu-item">
+            <div class="mi-icon" style="background:#dcfce7">👤</div>
+            <div class="mi-label">Informations personnelles</div>
+            <div class="mi-arrow">›</div>
+          </div>
+          <div class="menu-item">
+            <div class="mi-icon" style="background:#dbeafe">🔔</div>
+            <div class="mi-label">Notifications</div>
+            <div class="mi-arrow">›</div>
+          </div>
+          <div class="menu-item">
+            <div class="mi-icon" style="background:#fef9c3">🔒</div>
+            <div class="mi-label">Sécurité & Confidentialité</div>
+            <div class="mi-arrow">›</div>
+          </div>
+        </div>
+
+        <div class="profile-card">
+          <div style="font-size:13px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Mes activités</div>
+          <div class="menu-item">
+            <div class="mi-icon" style="background:#dcfce7">📋</div>
+            <div class="mi-label">Mes signalements (23)</div>
+            <div class="mi-arrow">›</div>
+          </div>
+          <div class="menu-item">
+            <div class="mi-icon" style="background:#f3f4f6">🏆</div>
+            <div class="mi-label">Mes badges (4/12)</div>
+            <div class="mi-arrow">›</div>
+          </div>
+          <div class="menu-item">
+            <div class="mi-icon" style="background:#fce7f3">📊</div>
+            <div class="mi-label">Classement général</div>
+            <div style="background:#dcfce7;color:var(--green-d);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">#12</div>
+          </div>
+        </div>
+
+        <div class="profile-card">
+          <div style="font-size:13px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Support</div>
+          <div class="menu-item">
+            <div class="mi-icon" style="background:#ede9fe">❓</div>
+            <div class="mi-label">Aide & FAQ</div>
+            <div class="mi-arrow">›</div>
+          </div>
+          <div class="menu-item">
+            <div class="mi-icon" style="background:#fce7f3">📧</div>
+            <div class="mi-label">Contacter le support</div>
+            <div class="mi-arrow">›</div>
+          </div>
+          <div class="menu-item" style="border-bottom:none">
+            <div class="mi-icon" style="background:#fee2e2">🚪</div>
+            <div class="mi-label" style="color:var(--red)">Se déconnecter</div>
+            <div class="mi-arrow">›</div>
+          </div>
+        </div>
+        <div style="text-align:center;padding:8px;font-size:11px;color:var(--gray-400)">EcoTrack v2.0.0 · Données protégées RGPD</div>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="bottom-nav">
+        <div class="nav-tab"><span class="tab-icon">🗺</span>Carte</div>
+        <div class="nav-tab"><span class="tab-icon">📋</span>Signaler</div>
+        <div class="nav-tab"><span class="tab-icon">🏆</span>Points</div>
+        <div class="nav-tab active"><span class="tab-icon">👤</span>Profil</div>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">5 — Profil Citoyen</div>
+</div>
+
+</body>
+</html>
