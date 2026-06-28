@@ -1,25 +1,15 @@
-// src/modules/routeSteps/routeSteps.routes.js
-/**
- * Endpoints :
- * - GET    /api/route-steps
- * - GET    /api/route-steps/by-route/:route_id
- * - GET    /api/route-steps/:id
- * - POST   /api/route-steps
- * - PATCH  /api/route-steps/:id
- * - DELETE /api/route-steps/:id
- */
-
 const router = require("express").Router();
 const c = require("./routeSteps.controller");
+const { authorize } = require("../../middleware/authorize.middleware");
 
-router.get("/", c.list);
+const GESTION       = ["admin", "gestionnaire"];
+const GESTION_AGENT = ["admin", "gestionnaire", "agent"];
 
-// IMPORTANT : route spécifique avant "/:id"
-router.get("/by-route/:route_id", c.listByRoute);
-
-router.get("/:id", c.getById);
-router.post("/", c.create);
-router.patch("/:id", c.update);
-router.delete("/:id", c.remove);
+router.get("/",                      authorize(GESTION_AGENT), c.list);
+router.get("/by-route/:route_id",    authorize(GESTION_AGENT), c.listByRoute);
+router.get("/:id",                   authorize(GESTION_AGENT), c.getById);
+router.post("/",                     authorize(GESTION),       c.create);
+router.patch("/:id",                 authorize(GESTION_AGENT), c.update);  // agent valide une étape
+router.delete("/:id",                authorize(GESTION),       c.remove);
 
 module.exports = router;

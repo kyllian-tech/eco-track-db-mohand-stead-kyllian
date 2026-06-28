@@ -1,54 +1,34 @@
+import { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
+import { getNotifications, markAsRead } from "../api/notifications";
+
 function CitizenNotifications() {
-  const notifications = [
-    {
-      id: 1,
-      title: "Signalement reçu",
-      message:
-        "Votre signalement concernant Place Centrale a bien été enregistré.",
-      category: "Signalement",
-      status: "Non lu",
-      date: "Il y a 10 min",
-    },
-    {
-      id: 2,
-      title: "Signalement pris en charge",
-      message:
-        "Un agent a été affecté au traitement du dépôt sauvage Avenue Verte.",
-      category: "Suivi",
-      status: "Lu",
-      date: "Hier",
-    },
-    {
-      id: 3,
-      title: "Nouveau badge obtenu",
-      message:
-        "Vous avez obtenu le badge Citoyen actif grâce à vos contributions.",
-      category: "Gamification",
-      status: "Non lu",
-      date: "Cette semaine",
-    },
-    {
-      id: 4,
-      title: "Nouveau défi disponible",
-      message:
-        "Le défi Ville propre ce mois-ci est maintenant disponible dans votre espace.",
-      category: "Défi",
-      status: "Lu",
-      date: "Cette semaine",
-    },
-  ];
+  const { user } = useAuth();
 
-  const unread = notifications.filter(
-    (notification) => notification.status === "Non lu"
-  ).length;
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const followUp = notifications.filter(
-    (notification) => notification.category === "Suivi"
-  ).length;
+  useEffect(() => {
+    if (!user?.id) return;
 
-  const gamification = notifications.filter(
-    (notification) => notification.category === "Gamification"
-  ).length;
+    getNotifications({ user_id: user.id })
+      .then((data) => setNotifications(Array.isArray(data) ? data : (data?.data ?? [])))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user?.id]);
+
+  const handleMarkAsRead = async (id) => {
+    try {
+      const updated = await markAsRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, est_lu: updated?.est_lu ?? true } : n))
+      );
+    } catch {
+      // silencieux
+    }
+  };
+
+  const unread = notifications.filter((n) => !n.est_lu).length;
 
   return (
     <div className="citizen-notifications-page-pro">
@@ -75,43 +55,50 @@ function CitizenNotifications() {
         </div>
 
         <div className="overview-card success">
-          <span>Suivi</span>
-          <strong>{followUp}</strong>
-        </div>
-
-        <div className="overview-card">
-          <span>Gamification</span>
-          <strong>{gamification}</strong>
+          <span>Lues</span>
+          <strong>{notifications.length - unread}</strong>
         </div>
       </div>
 
       <div className="panel-pro">
-        <div className="citizen-notifications-list">
-          {notifications.map((notification) => (
-            <article
-              className={
-                notification.status === "Non lu"
-                  ? "citizen-notification-card unread"
-                  : "citizen-notification-card"
-              }
-              key={notification.id}
-            >
-              <div>
-                <div className="citizen-notification-header">
-                  <h3>{notification.title}</h3>
-                  <span>{notification.category}</span>
-                </div>
+        {loading ? (
+          <p>Chargement…</p>
+        ) : notifications.length === 0 ? (
+          <p>Aucune notification pour le moment.</p>
+        ) : (
+          <div className="citizen-notifications-list">
+            {notifications.map((notif) => (
+              <article
+                className={notif.est_lu ? "citizen-notification-card" : "citizen-notification-card unread"}
+                key={notif.id}
+              >
+                <div>
+                  <div className="citizen-notification-header">
+                    <h3>{notif.titre}</h3>
+                    {!notif.est_lu && (
+                      <button
+                        className="secondary-btn"
+                        onClick={() => handleMarkAsRead(notif.id)}
+                        style={{ fontSize: "0.75rem", padding: "2px 8px" }}
+                      >
+                        Marquer comme lue
+                      </button>
+                    )}
+                  </div>
 
-                <p>{notification.message}</p>
+                  <p>{notif.message}</p>
 
-                <div className="citizen-notification-meta">
-                  <span>{notification.date}</span>
-                  <strong>{notification.status}</strong>
+                  <div className="citizen-notification-meta">
+                    <span>
+                      {new Date(notif.created_at).toLocaleDateString("fr-FR")}
+                    </span>
+                    <strong>{notif.est_lu ? "Lu" : "Non lu"}</strong>
+                  </div>
                 </div>
-              </div>
-            </article>
-          ))}
-        </div>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

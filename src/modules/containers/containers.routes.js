@@ -1,33 +1,14 @@
-/**
- * Fichier : containersRoutes.js
- * Rôle : Définition des routes HTTP liées aux containers.
- *
- * Endpoints :
- * - GET    /api/containers
- * - GET    /api/containers/:id
- * - POST   /api/containers
- * - PATCH  /api/containers/:id
- * - DELETE /api/containers/:id
- */
-
 const router = require("express").Router();
-const c = require("../containers/containers.controller");
+const c = require("./containers.controller");
+const { authorize } = require("../../middleware/authorize.middleware");
 
-// Liste (optionnel: ?zone_id=...&type=...)
-router.get("/", c.list);
+const TOUS    = ["admin", "gestionnaire", "agent", "analyste", "citoyen"];
+const GESTION = ["admin", "gestionnaire"];
 
-// Détail
-router.get("/:id", c.getById);
-
-// Création
-router.post("/", c.create);
-
-// Mise à jour partielle
-router.patch("/:id", c.update);
-
-// Suppression
-router.delete("/:id", c.remove);
-
-
+router.get("/",       authorize(TOUS),         c.list);
+router.get("/:id",    authorize(TOUS),         c.getById);
+router.post("/",      authorize(GESTION),      c.create);
+router.patch("/:id",  authorize(GESTION),      c.update);
+router.delete("/:id", authorize(["admin"]),    c.remove);
 
 module.exports = router;

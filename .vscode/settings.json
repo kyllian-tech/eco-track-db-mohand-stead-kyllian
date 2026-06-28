@@ -1,3 +1,5 @@
 {
-    "accessibility.accessibleView.closeOnKeyPress": true
+    "accessibility.accessibleView.closeOnKeyPress": true,
+    "snyk.advanced.organization": "8930060a-2d5d-4da6-b75d-420805f42285",
+    "snyk.advanced.autoSelectOrganization": true
 }

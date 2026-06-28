@@ -6,7 +6,7 @@ const { authorize } = require("../../middleware/authorize.middleware");
 const mlService = require("./ml.service");
 
 // POST /api/ml/predict — Prédiction du taux de remplissage
-router.post("/predict", auth, authorize(["admin", "gestionnaire", "analyst"]), async (req, res, next) => {
+router.post("/predict", auth, authorize(["admin", "gestionnaire", "analyste"]), async (req, res, next) => {
   try {
     const { container_id, horizon_hours = 24 } = req.body;
     if (!container_id) return res.status(400).json({ error: "container_id required" });

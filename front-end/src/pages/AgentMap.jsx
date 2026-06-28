@@ -1,67 +1,52 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "../context/ToastContext";
+import { getContainers } from "../api/containers";
+import { createMeasurement } from "../api/measurements";
+import { useAuth } from "../context/AuthContext";
+
+function getFillClass(fill) {
+  if (fill >= 85) return "critical";
+  if (fill >= 60) return "warning";
+  return "normal";
+}
 
 function AgentMap() {
   const { showToast } = useToast();
+  const { user } = useAuth();
 
-  const [containers, setContainers] = useState([
-    {
-      id: 1,
-      name: "Conteneur Centre-ville",
-      location: "Place Centrale",
-      fill: 95,
-      priority: "Critique",
-      x: "24%",
-      y: "30%",
-      status: "À collecter",
-    },
-    {
-      id: 2,
-      name: "Conteneur Quartier Nord",
-      location: "Rue des Écoles",
-      fill: 72,
-      priority: "Attention",
-      x: "53%",
-      y: "46%",
-      status: "À collecter",
-    },
-    {
-      id: 3,
-      name: "Conteneur Parc Sud",
-      location: "Avenue Verte",
-      fill: 38,
-      priority: "Normal",
-      x: "76%",
-      y: "66%",
-      status: "Optionnel",
-    },
-  ]);
+  const [containers, setContainers] = useState([]);
+  const [collected, setCollected] = useState(new Set());
+  const [loading, setLoading] = useState(true);
 
-  const markCollected = (id) => {
-    setContainers((current) =>
-      current.map((item) =>
-        item.id === id
-          ? { ...item, status: "Collecté", priority: "Normal", fill: 0 }
-          : item
-      )
-    );
+  useEffect(() => {
+    getContainers()
+      .then((data) => setContainers(Array.isArray(data) ? data : (data?.data ?? [])))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
-    showToast("Collecte validée.", "success");
+  const markCollected = async (container) => {
+    try {
+      await createMeasurement({
+        container_id: container.id,
+        taux_remplissage: 0,
+        source: "agent_terrain",
+      });
+
+      setCollected((prev) => new Set([...prev, container.id]));
+      showToast(`Collecte validée pour ${container.code}.`, "success");
+    } catch {
+      // fallback : marquer localement même si l'API échoue
+      setCollected((prev) => new Set([...prev, container.id]));
+      showToast("Collecte validée (hors ligne).", "success");
+    }
   };
 
-  const getClass = (priority) => {
-    if (priority === "Critique") return "critical";
-    if (priority === "Attention") return "warning";
-    return "normal";
-  };
-
-  const collectedCount = containers.filter(
-    (item) => item.status === "Collecté"
-  ).length;
-
-  const priorityCount = containers.filter(
-    (item) => item.priority !== "Normal"
-  ).length;
+  const collectedCount = collected.size;
+  const priorityCount = containers.filter((c) => {
+    const fill = c.last_fill ?? c.taux_remplissage ?? 0;
+    return fill >= 60 && !collected.has(c.id);
+  }).length;
 
   return (
     <div className="agent-map-page">
@@ -70,15 +55,15 @@ function AgentMap() {
           <span className="eyebrow">Navigation terrain</span>
           <h1>Carte de tournée</h1>
           <p>
-            Suivez votre tournée en direct, visualisez les priorités et validez
-            rapidement les conteneurs collectés.
+            Visualisez les conteneurs, consultez leur niveau et validez les
+            collectes sur le terrain.
           </p>
         </div>
       </div>
 
       <div className="containers-overview">
         <div className="overview-card">
-          <span>Étapes</span>
+          <span>Conteneurs</span>
           <strong>{containers.length}</strong>
         </div>
 
@@ -93,67 +78,83 @@ function AgentMap() {
         </div>
 
         <div className="overview-card">
-          <span>Distance</span>
-          <strong>18.7 km</strong>
+          <span>Restants</span>
+          <strong>{containers.length - collectedCount}</strong>
         </div>
       </div>
 
       <div className="agent-map-grid">
         <section className="agent-map-card">
           <div className="agent-tour-map">
-            <div className="agent-tour-path"></div>
+            <div className="agent-tour-path" />
 
-            <span className="agent-zone-label agent-zone-center">
-              CENTRE-VILLE
-            </span>
-            <span className="agent-zone-label agent-zone-north">
-              QUARTIER NORD
-            </span>
-            <span className="agent-zone-label agent-zone-south">
-              PARC SUD
-            </span>
+            <span className="agent-zone-label agent-zone-center">ZONE A</span>
+            <span className="agent-zone-label agent-zone-north">ZONE B</span>
+            <span className="agent-zone-label agent-zone-south">ZONE C</span>
 
-            {containers.map((container) => (
-              <button
-                key={container.id}
-                className={`agent-tour-marker ${getClass(container.priority)}`}
-                style={{ left: container.x, top: container.y }}
-                title={container.name}
-              >
-                {container.fill}%
-              </button>
-            ))}
+            {containers.slice(0, 6).map((c, i) => {
+              const positions = [
+                { left: "24%", top: "30%" },
+                { left: "53%", top: "46%" },
+                { left: "76%", top: "66%" },
+                { left: "35%", top: "60%" },
+                { left: "65%", top: "28%" },
+                { left: "45%", top: "75%" },
+              ];
+              const pos = positions[i] ?? { left: `${20 + i * 10}%`, top: "50%" };
+              const fill = c.last_fill ?? 0;
+              return (
+                <button
+                  key={c.id}
+                  className={`agent-tour-marker ${collected.has(c.id) ? "normal" : getFillClass(fill)}`}
+                  style={pos}
+                  title={`${c.code} — ${c.type}`}
+                >
+                  {collected.has(c.id) ? "✓" : `${fill}%`}
+                </button>
+              );
+            })}
           </div>
         </section>
 
         <section className="agent-map-results">
           <h2>Étapes terrain</h2>
 
-          <div className="agent-map-list">
-            {containers.map((container) => (
-              <article className="agent-map-row" key={container.id}>
-                <div>
-                  <h3>{container.name}</h3>
-                  <p>{container.location}</p>
+          {loading ? (
+            <p>Chargement…</p>
+          ) : containers.length === 0 ? (
+            <p>Aucun conteneur disponible.</p>
+          ) : (
+            <div className="agent-map-list">
+              {containers.map((c) => {
+                const fill = c.last_fill ?? 0;
+                const isCollected = collected.has(c.id);
+                return (
+                  <article className="agent-map-row" key={c.id}>
+                    <div>
+                      <h3>{c.code} — {c.type}</h3>
+                      <p>{c.zone_id ? `Zone ${c.zone_id}` : "Zone non précisée"}</p>
 
-                  <div className="agent-step-tags">
-                    <span className={getClass(container.priority)}>
-                      {container.priority}
-                    </span>
-                    <span>{container.status}</span>
-                  </div>
-                </div>
+                      <div className="agent-step-tags">
+                        <span className={isCollected ? "normal" : getFillClass(fill)}>
+                          {isCollected ? "Collecté" : fill >= 85 ? "Critique" : fill >= 60 ? "Attention" : "Normal"}
+                        </span>
+                        <span>{fill}% remplissage</span>
+                      </div>
+                    </div>
 
-                <button
-                  className="primary-btn"
-                  onClick={() => markCollected(container.id)}
-                  disabled={container.status === "Collecté"}
-                >
-                  Valider
-                </button>
-              </article>
-            ))}
-          </div>
+                    <button
+                      className="primary-btn"
+                      onClick={() => markCollected(c)}
+                      disabled={isCollected}
+                    >
+                      {isCollected ? "Validé" : "Valider"}
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
       </div>
     </div>

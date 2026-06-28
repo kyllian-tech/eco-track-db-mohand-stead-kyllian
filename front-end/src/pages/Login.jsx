@@ -4,9 +4,17 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import logo from "../assets/logo.png";
 
+const REDIRECT_BY_ROLE = {
+  citizen: "/space/citizen",
+  agent: "/space/agent",
+  manager: "/space/manager",
+  admin: "/space/admin",
+};
+
 function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginDemo } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
   const { showToast } = useToast();
 
   const [spaceType, setSpaceType] = useState(null);
@@ -43,54 +51,17 @@ function Login() {
     },
   };
 
-  const redirectByRole = (role) => {
-    if (role === "citizen") navigate("/space/citizen");
-    else if (role === "agent") navigate("/space/agent");
-    else if (role === "manager") navigate("/space/manager");
-    else if (role === "admin") navigate("/space/admin");
-    else navigate("/login");
-  };
-
-  const generateVerificationCode = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
-
   const handleChange = (event) => {
     const { name, value } = event.target;
-
-    setFormData((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    setFormData((current) => ({ ...current, [name]: value }));
   };
 
   const handleSpaceChoice = (type) => {
     setSpaceType(type);
-
-    if (type === "citizen") {
-      setSelectedRole("citizen");
-    } else {
-      setSelectedRole("agent");
-    }
+    setSelectedRole(type === "citizen" ? "citizen" : "agent");
   };
 
-  const startEmailVerification = (selectedUser) => {
-    const verificationCode = generateVerificationCode();
-
-    localStorage.setItem(
-      "ecotrack_pending_login_verification",
-      JSON.stringify({
-        user: selectedUser,
-        verificationCode,
-        createdAt: new Date().toISOString(),
-      })
-    );
-
-    showToast(`Code de connexion envoyé : ${verificationCode}`, "success");
-    navigate("/verify-login-email");
-  };
-
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (!formData.email.trim() || !formData.password.trim()) {
@@ -98,16 +69,23 @@ function Login() {
       return;
     }
 
-    const selectedUser = users[selectedRole];
-    startEmailVerification(selectedUser);
+    setIsLoading(true);
+    try {
+      const userData = await login(formData.email.trim(), formData.password);
+      showToast("Connexion réussie.", "success");
+      navigate(REDIRECT_BY_ROLE[userData.role] ?? "/login");
+    } catch {
+      showToast("Email ou mot de passe incorrect.", "error");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDemoAccess = () => {
     const selectedUser = users[selectedRole];
-
-    login(selectedUser);
+    loginDemo(selectedUser);
     showToast("Accès démo activé.", "success");
-    redirectByRole(selectedUser.role);
+    navigate(REDIRECT_BY_ROLE[selectedUser.role] ?? "/login");
   };
 
   if (!spaceType) {
@@ -218,8 +196,8 @@ function Login() {
             />
           </div>
 
-          <button type="submit" className="primary-btn full-width">
-            Continuer avec vérification email
+          <button type="submit" className="primary-btn full-width" disabled={isLoading}>
+            {isLoading ? "Connexion en cours…" : "Se connecter"}
           </button>
         </form>
 

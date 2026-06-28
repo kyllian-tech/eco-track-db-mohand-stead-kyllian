@@ -88,4 +88,27 @@ async function refresh(refreshToken) {
   };
 }
 
-module.exports = { register, login, refresh };
+async function adminCreateUser({ email, password, role, full_name }) {
+  const existing = await repo.findUserByEmail(email);
+  if (existing) throw new ValidationError("Un compte avec cet email existe déjà");
+
+  const password_hash = await hashPassword(password);
+  const user = await repo.createUser({ email, role, full_name: full_name || null, password_hash });
+
+  // Créer le profil associé
+  try {
+    const { supabaseAdmin } = require("../../config/supabaseAdmin");
+    await supabaseAdmin.schema("public").from("profiles").insert({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      points: 0,
+    });
+  } catch (_) {
+    // Profil optionnel — ne bloque pas la création
+  }
+
+  return sanitizeUser(user);
+}
+
+module.exports = { register, login, refresh, adminCreateUser };

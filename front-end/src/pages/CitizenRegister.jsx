@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
+import { registerApi } from "../api/auth";
 import logo from "../assets/logo.png";
 
 function CitizenRegister() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { login } = useAuth();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -14,21 +17,14 @@ function CitizenRegister() {
     password: "",
     confirmPassword: "",
   });
-
-  const generateVerificationCode = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-
-    setFormData((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    setFormData((current) => ({ ...current, [name]: value }));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (
@@ -47,29 +43,37 @@ function CitizenRegister() {
       return;
     }
 
-    const verificationCode = generateVerificationCode();
+    if (formData.password.length < 8) {
+      showToast("Le mot de passe doit contenir au moins 8 caractères.", "error");
+      return;
+    }
 
-    const pendingCitizenRegistration = {
-      id: Date.now(),
-      name: formData.name,
-      email: formData.email,
-      city: formData.city,
-      role: "citizen",
-      roleLabel: "Citoyen",
-      status: "Email à confirmer",
-      verified: false,
-      verificationCode,
-      createdAt: new Date().toLocaleDateString("fr-FR"),
-    };
+    setIsLoading(true);
+    try {
+      // Inscription via le backend
+      await registerApi(formData.email.trim(), formData.password, formData.name.trim(), "citoyen");
 
-    localStorage.setItem(
-      "ecotrack_pending_email_verification",
-      JSON.stringify(pendingCitizenRegistration)
-    );
+      // Connexion automatique après inscription réussie
+      await login(formData.email.trim(), formData.password);
 
-    showToast(`Code de confirmation envoyé : ${verificationCode}`, "success");
+      showToast("Compte créé avec succès. Bienvenue !", "success");
+      navigate("/space/citizen", { replace: true });
+    } catch (error) {
+      const data = error?.response?.data;
+      console.error("[Register] Erreur backend :", JSON.stringify(data, null, 2));
 
-    navigate("/verify-email");
+      // Affiche les détails de validation si disponibles
+      if (data?.details?.length) {
+        const detail = data.details[0];
+        showToast(`Champ "${detail.field}" : ${detail.message}`, "error");
+      } else if (data?.message?.toLowerCase().includes("already exists")) {
+        showToast("Un compte existe déjà avec cet email.", "error");
+      } else {
+        showToast(data?.error || data?.message || "Erreur lors de l'inscription. Réessayez.", "error");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -84,8 +88,8 @@ function CitizenRegister() {
         <h1>Créer un compte citoyen</h1>
 
         <p>
-          Créez votre compte particulier. Une confirmation par email sera
-          demandée avant l’envoi de votre demande à l’administrateur.
+          Créez votre compte pour signaler des anomalies, suivre vos
+          contributions et participer aux défis environnementaux.
         </p>
 
         <form className="auth-form" onSubmit={handleSubmit}>
@@ -123,7 +127,7 @@ function CitizenRegister() {
           </div>
 
           <div className="form-group">
-            <label>Mot de passe</label>
+            <label>Mot de passe <span style={{ color: "#888", fontSize: "0.85em" }}>(8 caractères min.)</span></label>
             <input
               type="password"
               name="password"
@@ -144,8 +148,8 @@ function CitizenRegister() {
             />
           </div>
 
-          <button type="submit" className="primary-btn full-width">
-            Continuer
+          <button type="submit" className="primary-btn full-width" disabled={isLoading}>
+            {isLoading ? "Création en cours…" : "Créer mon compte"}
           </button>
         </form>
 

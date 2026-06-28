@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const { requestLogger } = require("./middleware/request-logger.middleware");
-const { apiLimiter, measurementLimiter, authLimiter } = require("./middleware/rate-limit.middleware");
+const { apiLimiter, measurementLimiter } = require("./middleware/rate-limit.middleware");
 const { notFoundHandler, errorHandler } = require("./middleware/error.middleware");
 const { securityHeaders, cspReportHandler } = require("./middleware/security-headers.middleware");
 const { compressionMiddleware } = require("./middleware/compression.middleware");
@@ -46,8 +46,8 @@ app.post("/api/csp-report", express.json({ type: "application/csp-report", limit
 safeMount("/health", () => require("./modules/health/health.routes"));
 safeMount("/metrics", () => require("./modules/metrics/metrics.routes"));
 
-// Auth endpoints (with stricter rate limiting)
-safeMount("/api/auth", () => require("./modules/auth/auth.routes"), [authLimiter]);
+// Auth endpoints (limiteurs gérés dans auth.routes.js par endpoint)
+safeMount("/api/auth", () => require("./modules/auth/auth.routes"));
 
 // Protected API endpoints
 const apiMiddlewares = [apiLimiter, auth];
@@ -55,7 +55,7 @@ safeMount("/api/profiles", () => require("./modules/profiles/profiles.routes"), 
 safeMount("/api/badges", () => require("./modules/badges/badges.routes"), apiMiddlewares);
 safeMount("/api/challenges", () => require("./modules/challenges/challenges.routes"), apiMiddlewares);
 safeMount("/api/containers", () => require("./modules/containers/containers.routes"), apiMiddlewares);
-safeMount("/api/measurements", () => require("./modules/measurements/measurements.routes"), [apiLimiter, measurementLimiter]);
+safeMount("/api/measurements", () => require("./modules/measurements/measurements.routes"), [apiLimiter, auth, measurementLimiter]);
 safeMount("/api/notifications", () => require("./modules/notifications/notifications.routes"), apiMiddlewares);
 safeMount("/api/routes", () => require("./modules/routes/routes.routes"), apiMiddlewares);
 safeMount("/api/route-steps", () => require("./modules/routeSteps/routeSteps.routes"), apiMiddlewares);

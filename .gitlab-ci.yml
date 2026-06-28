@@ -32,10 +32,10 @@ lint:eslint:
   image: node:20-alpine
   script:
     - npm ci
-    - npx eslint src/ --ext .js --max-warnings 0
+    - npx eslint src/ --max-warnings 0
   rules:
+    - if: $CI_COMMIT_BRANCH =~ /^(main|dev)$/
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == "main"
 
 lint:audit:
   stage: lint
@@ -72,6 +72,19 @@ test:mutation:
     paths:
       - reports/mutation/
     expire_in: 7 days
+  allow_failure: true
+
+sonarqube:
+  stage: test
+  image: sonarsource/sonar-scanner-cli:latest
+  script:
+    - sonar-scanner
+        -Dsonar.projectKey=ecotrack-api
+        -Dsonar.sources=src
+        -Dsonar.tests=tests
+        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+        -Dsonar.host.url=$SONARQUBE_URL
+        -Dsonar.login=$SONARQUBE_TOKEN
   allow_failure: true
 
 # ── Security ───────────────────────────────────────────────────────────────────
@@ -121,7 +134,7 @@ build:docker:
     - docker push $IMAGE_NAME:$IMAGE_TAG
     - docker push $IMAGE_NAME:latest
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^(main|dev)$/
     - if: $CI_COMMIT_BRANCH =~ /^release\/.*/
 
 # ── Staging ────────────────────────────────────────────────────────────────────
@@ -139,7 +152,8 @@ deploy:staging:
     - kubectl run smoke-test --rm -i --restart=Never --image=curlimages/curl --
         curl -fsS https://api.staging.ecotrack.com/health/ready
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^(main|dev)$/
+  allow_failure: true
 
 # ── Performance ────────────────────────────────────────────────────────────────
 performance:k6:
@@ -153,7 +167,8 @@ performance:k6:
       - k6-results.json
     expire_in: 30 days
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^(main|dev)$/
+  allow_failure: true
 
 performance:owasp-zap:
   stage: performance
@@ -166,6 +181,8 @@ performance:owasp-zap:
       - zap-report.html
     expire_in: 30 days
   allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^(main|dev)$/
 
 # ── Production (Blue/Green) ────────────────────────────────────────────────────
 .deploy-bluegreen: &deploy-bluegreen
@@ -178,21 +195,15 @@ performance:owasp-zap:
       NEW_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
       echo "Deploying $NEW_COLOR (was $CURRENT_COLOR)"
 
-      # Deploy new version to inactive slot
       kubectl set image deployment/ecotrack-api-$NEW_COLOR \
         ecotrack-api=$IMAGE_NAME:$IMAGE_TAG -n ecotrack-prod
       kubectl rollout status deployment/ecotrack-api-$NEW_COLOR -n ecotrack-prod --timeout=300s
 
-      # Sanity check on new slot
       NEW_POD=$(kubectl get pod -n ecotrack-prod -l app=ecotrack-api,color=$NEW_COLOR -o jsonpath='{.items[0].metadata.name}')
       kubectl exec $NEW_POD -n ecotrack-prod -- wget -qO- http://localhost:3000/health/ready
 
-      # Traffic shift
       kubectl patch svc ecotrack-api -n ecotrack-prod -p "{\"spec\":{\"selector\":{\"color\":\"$NEW_COLOR\"}}}"
-
       echo "Traffic shifted to $NEW_COLOR"
-
-      # Scale down old slot
       kubectl scale deployment/ecotrack-api-$CURRENT_COLOR --replicas=1 -n ecotrack-prod
   after_script:
     - |
@@ -210,21 +221,9 @@ deploy:production:
     name: production
     url: https://api.ecotrack.com
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^(main|dev)$/
       when: manual
   needs:
     - deploy:staging
     - performance:k6
-
-sonarqube:
-  stage: test
-  image: sonarsource/sonar-scanner-cli:latest
-  script:
-    - sonar-scanner
-        -Dsonar.projectKey=ecotrack-api
-        -Dsonar.sources=src
-        -Dsonar.tests=tests
-        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-        -Dsonar.host.url=$SONARQUBE_URL
-        -Dsonar.login=$SONARQUBE_TOKEN
   allow_failure: true

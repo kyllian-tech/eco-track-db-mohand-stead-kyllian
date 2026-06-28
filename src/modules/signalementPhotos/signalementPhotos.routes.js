@@ -1,17 +1,13 @@
-// src/modules/signalementPhotos/signalementPhotos.routes.js
 const router = require("express").Router();
 const c = require("./signalementPhotos.controller");
+const { authorize } = require("../../middleware/authorize.middleware");
 
-/** * GET /api/signalement-photos * Filtres optionnels : * - ?signalement_id=uuid */
-router.get("/", c.list);
+const TOUS    = ["admin", "gestionnaire", "agent", "analyste", "citoyen"];
+const GESTION = ["admin", "gestionnaire"];
 
-/** * GET /api/signalement-photos/:id */
-router.get("/:id", c.getById);
-
-/** * POST /api/signalement-photos */
-router.post("/", c.create);
-
-/** * DELETE /api/signalement-photos/:id */
-router.delete("/:id", c.remove);
+router.get("/",       authorize(TOUS),      c.list);
+router.get("/:id",    authorize(TOUS),      c.getById);
+router.post("/",      authorize(TOUS),      c.create);
+router.delete("/:id", authorize(GESTION),  c.remove);
 
 module.exports = router;

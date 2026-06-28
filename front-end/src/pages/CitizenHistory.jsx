@@ -1,55 +1,47 @@
+import { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
+import { getSignalements } from "../api/signalements";
+import { getUserBadges, getBadges } from "../api/badges";
+
+const STATUT_LABEL = {
+  OUVERT: "Envoyé",
+  EN_COURS: "En cours",
+  RESOLU: "Traité",
+};
+
 function CitizenHistory() {
-  const reports = [
-    {
-      id: 1,
-      type: "Conteneur plein",
-      location: "Place Centrale",
-      date: "Aujourd’hui",
-      status: "Envoyé",
-      points: 20,
-    },
-    {
-      id: 2,
-      type: "Dépôt sauvage",
-      location: "Avenue Verte",
-      date: "Hier",
-      status: "En cours",
-      points: 35,
-    },
-    {
-      id: 3,
-      type: "Conteneur endommagé",
-      location: "Rue des Écoles",
-      date: "Cette semaine",
-      status: "Traité",
-      points: 50,
-    },
-  ];
+  const { user } = useAuth();
 
-  const badges = [
-    {
-      id: 1,
-      title: "Premier signalement",
-      description: "Premier problème déclaré sur la plateforme.",
-      status: "Obtenu",
-    },
-    {
-      id: 2,
-      title: "Citoyen actif",
-      description: "Plus de 10 signalements utiles envoyés.",
-      status: "Obtenu",
-    },
-    {
-      id: 3,
-      title: "Quartier propre",
-      description: "Contribution à la résolution de plusieurs anomalies.",
-      status: "En progression",
-    },
-  ];
+  const [reports, setReports] = useState([]);
+  const [userBadges, setUserBadges] = useState([]);
+  const [allBadges, setAllBadges] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const totalPoints = reports.reduce((sum, report) => sum + report.points, 0);
-  const treatedReports = reports.filter((report) => report.status === "Traité").length;
-  const activeReports = reports.filter((report) => report.status !== "Traité").length;
+  useEffect(() => {
+    if (!user?.id) return;
+
+    Promise.all([
+      getSignalements({ user_id: user.id }),
+      getUserBadges({ user_id: user.id }),
+      getBadges(),
+    ])
+      .then(([rpts, ub, badges]) => {
+        setReports(Array.isArray(rpts) ? rpts : (rpts?.data ?? []));
+        setUserBadges(Array.isArray(ub) ? ub : (ub?.data ?? []));
+        setAllBadges(Array.isArray(badges) ? badges : (badges?.data ?? []));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user?.id]);
+
+  const resolvedCount = reports.filter((r) => r.statut === "RESOLU").length;
+  const activeCount = reports.filter((r) => r.statut !== "RESOLU").length;
+
+  const ownedBadgeIds = new Set(userBadges.map((ub) => ub.badge_id));
+  const badgesDisplay = allBadges.map((b) => ({
+    ...b,
+    obtained: ownedBadgeIds.has(b.id),
+  }));
 
   return (
     <div className="citizen-history-page-pro">
@@ -58,8 +50,8 @@ function CitizenHistory() {
           <span className="eyebrow">Suivi personnel</span>
           <h1>Historique citoyen</h1>
           <p>
-            Consultez vos signalements, les points gagnés, vos badges et votre
-            progression dans l’espace citoyen.
+            Consultez vos signalements, vos badges et votre progression dans
+            l'espace citoyen.
           </p>
         </div>
       </div>
@@ -71,75 +63,96 @@ function CitizenHistory() {
         </div>
 
         <div className="overview-card success">
-          <span>Points gagnés</span>
-          <strong>{totalPoints}</strong>
+          <span>Badges obtenus</span>
+          <strong>{userBadges.length}</strong>
         </div>
 
         <div className="overview-card warning">
           <span>En cours</span>
-          <strong>{activeReports}</strong>
+          <strong>{activeCount}</strong>
         </div>
 
         <div className="overview-card success">
           <span>Traités</span>
-          <strong>{treatedReports}</strong>
+          <strong>{resolvedCount}</strong>
         </div>
       </div>
 
-      <div className="citizen-history-grid">
-        <section className="citizen-history-card large">
-          <h2>Mes signalements</h2>
+      {loading ? (
+        <p>Chargement…</p>
+      ) : (
+        <div className="citizen-history-grid">
+          <section className="citizen-history-card large">
+            <h2>Mes signalements</h2>
 
-          <div className="citizen-history-list">
-            {reports.map((report) => (
-              <article className="citizen-history-row" key={report.id}>
-                <div>
-                  <h3>{report.type}</h3>
-                  <p>{report.location}</p>
-                </div>
+            {reports.length === 0 ? (
+              <p>Aucun signalement pour le moment.</p>
+            ) : (
+              <div className="citizen-history-list">
+                {reports.map((report) => (
+                  <article className="citizen-history-row" key={report.id}>
+                    <div>
+                      <h3>{report.type_incident}</h3>
+                      <p>{report.description ?? "—"}</p>
+                    </div>
 
-                <div className="citizen-history-meta">
-                  <span>{report.date}</span>
-                  <span>{report.status}</span>
-                  <strong>{report.points} pts</strong>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
+                    <div className="citizen-history-meta">
+                      <span>
+                        {new Date(report.created_at).toLocaleDateString("fr-FR")}
+                      </span>
+                      <span>{STATUT_LABEL[report.statut] ?? report.statut}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
 
-        <section className="citizen-history-card">
-          <h2>Progression</h2>
+          <section className="citizen-history-card">
+            <h2>Progression</h2>
 
-          <div className="citizen-progress-box">
-            <span>Niveau actuel</span>
-            <strong>Citoyen engagé</strong>
+            <div className="citizen-progress-box">
+              <span>Signalements traités</span>
+              <strong>
+                {resolvedCount} / {reports.length}
+              </strong>
 
-            <div className="progress-bar">
-              <div className="progress-fill green" style={{ width: "68%" }}></div>
+              <div className="progress-bar">
+                <div
+                  className="progress-fill green"
+                  style={{
+                    width:
+                      reports.length > 0
+                        ? `${Math.round((resolvedCount / reports.length) * 100)}%`
+                        : "0%",
+                  }}
+                />
+              </div>
             </div>
+          </section>
 
-            <p>Encore 320 points pour atteindre le niveau Ambassadeur Eco.</p>
-          </div>
-        </section>
+          <section className="citizen-history-card">
+            <h2>Badges</h2>
 
-        <section className="citizen-history-card">
-          <h2>Badges</h2>
+            {badgesDisplay.length === 0 ? (
+              <p>Aucun badge disponible.</p>
+            ) : (
+              <div className="citizen-badges-list">
+                {badgesDisplay.map((badge) => (
+                  <article className="citizen-badge-row" key={badge.id}>
+                    <div>
+                      <h3>{badge.nom ?? badge.name ?? "Badge"}</h3>
+                      <p>{badge.description}</p>
+                    </div>
 
-          <div className="citizen-badges-list">
-            {badges.map((badge) => (
-              <article className="citizen-badge-row" key={badge.id}>
-                <div>
-                  <h3>{badge.title}</h3>
-                  <p>{badge.description}</p>
-                </div>
-
-                <span>{badge.status}</span>
-              </article>
-            ))}
-          </div>
-        </section>
-      </div>
+                    <span>{badge.obtained ? "Obtenu" : "À débloquer"}</span>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }

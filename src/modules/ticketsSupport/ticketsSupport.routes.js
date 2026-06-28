@@ -1,20 +1,14 @@
-/**
- * Endpoints :
- * - GET    /api/tickets-support
- * - GET    /api/tickets-support/:id
- * - POST   /api/tickets-support
- * - PATCH  /api/tickets-support/:id
- * - DELETE /api/tickets-support/:id
- */
-
-// src/modules/ticketsSupport/ticketsSupport.routes.js
 const router = require("express").Router();
 const c = require("./ticketsSupport.controller");
+const { authorize } = require("../../middleware/authorize.middleware");
 
-router.get("/", c.list);
-router.get("/:id", c.getById);
-router.post("/", c.create);
-router.patch("/:id", c.update);
-router.delete("/:id", c.remove);
+const TOUS    = ["admin", "gestionnaire", "agent", "analyste", "citoyen"];
+const GESTION = ["admin", "gestionnaire"];
+
+router.get("/",       authorize(TOUS),      c.list);
+router.get("/:id",    authorize(TOUS),      c.getById);
+router.post("/",      authorize(TOUS),      c.create);     // tout le monde peut ouvrir un ticket
+router.patch("/:id",  authorize(GESTION),   c.update);     // traitement par gestionnaire/admin
+router.delete("/:id", authorize(["admin"]), c.remove);
 
 module.exports = router;

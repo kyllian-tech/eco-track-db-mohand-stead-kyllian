@@ -1,51 +1,52 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { getRoutes, getRouteSteps } from "../api/routes";
+import { getSignalements } from "../api/signalements";
+
+const STATUT_LABEL = {
+  PLANIFIEE: "Planifiée",
+  EN_COURS: "En cours",
+  TERMINEE: "Terminée",
+  ANNULEE: "Annulée",
+};
 
 function AgentSpace() {
-  const routeSteps = [
-    {
-      id: 1,
-      container: "Conteneur Quartier Nord",
-      location: "Rue des Écoles",
-      fillLevel: 72,
-      status: "À collecter",
-      priority: "Attention",
-    },
-    {
-      id: 2,
-      container: "Conteneur Centre-ville",
-      location: "Place Centrale",
-      fillLevel: 95,
-      status: "Prioritaire",
-      priority: "Critique",
-    },
-    {
-      id: 3,
-      container: "Conteneur Parc Sud",
-      location: "Avenue Verte",
-      fillLevel: 38,
-      status: "Optionnel",
-      priority: "Normal",
-    },
-  ];
+  const { user } = useAuth();
 
-  const incidents = [
-    {
-      id: 1,
-      title: "Accès partiellement bloqué",
-      location: "Rue des Écoles",
-      status: "À vérifier",
-    },
-    {
-      id: 2,
-      title: "Conteneur endommagé",
-      location: "Place Centrale",
-      status: "Urgent",
-    },
-  ];
+  const [route, setRoute] = useState(null);
+  const [steps, setSteps] = useState([]);
+  const [incidents, setIncidents] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const completedSteps = 15;
-  const totalSteps = 24;
-  const progress = Math.round((completedSteps / totalSteps) * 100);
+  useEffect(() => {
+    async function load() {
+      try {
+        const [routes, signalements] = await Promise.all([
+          getRoutes({ statut: "EN_COURS", agent_id: user?.id }),
+          getSignalements({ statut: "OUVERT" }),
+        ]);
+
+        const activeRoute = Array.isArray(routes) ? routes[0] : null;
+        setRoute(activeRoute ?? null);
+        setIncidents(Array.isArray(signalements) ? signalements.slice(0, 5) : []);
+
+        if (activeRoute?.id) {
+          const routeSteps = await getRouteSteps(activeRoute.id);
+          setSteps(Array.isArray(routeSteps) ? routeSteps : []);
+        }
+      } catch {
+        // charge silencieuse en cas d'erreur
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const completedSteps = steps.filter((s) => s.collecte_effectuee === true).length;
+  const totalSteps = steps.length;
+  const progress = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
 
   return (
     <div className="agent-dashboard-page-pro">
@@ -64,125 +65,141 @@ function AgentSpace() {
         </Link>
       </div>
 
-      <div className="containers-overview">
-        <div className="overview-card">
-          <span>Tournée du jour</span>
-          <strong>1</strong>
-        </div>
-
-        <div className="overview-card success">
-          <span>Collectes validées</span>
-          <strong>{completedSteps}</strong>
-        </div>
-
-        <div className="overview-card warning">
-          <span>Restantes</span>
-          <strong>{totalSteps - completedSteps}</strong>
-        </div>
-
-        <div className="overview-card danger">
-          <span>Anomalies terrain</span>
-          <strong>{incidents.length}</strong>
-        </div>
-      </div>
-
-      <div className="agent-dashboard-grid">
-        <section className="agent-card-pro large">
-          <div className="agent-card-header">
-            <div>
-              <h2>Tournée assignée</h2>
-              <p>Quartier Nord — Agent Collecte</p>
+      {loading ? (
+        <p>Chargement…</p>
+      ) : (
+        <>
+          <div className="containers-overview">
+            <div className="overview-card">
+              <span>Tournée du jour</span>
+              <strong>{route ? 1 : 0}</strong>
             </div>
 
-            <span className="agent-status-badge">En cours</span>
-          </div>
-
-          <div className="agent-route-summary">
-            <div>
-              <span>Distance estimée</span>
-              <strong>18.7 km</strong>
+            <div className="overview-card success">
+              <span>Étapes validées</span>
+              <strong>{completedSteps}</strong>
             </div>
 
-            <div>
-              <span>Durée estimée</span>
-              <strong>2h10</strong>
+            <div className="overview-card warning">
+              <span>Restantes</span>
+              <strong>{totalSteps - completedSteps}</strong>
             </div>
 
-            <div>
-              <span>Conteneurs</span>
-              <strong>{totalSteps}</strong>
+            <div className="overview-card danger">
+              <span>Anomalies terrain</span>
+              <strong>{incidents.length}</strong>
             </div>
           </div>
 
-          <div className="agent-progress-block">
-            <div className="agent-progress-info">
-              <span>Progression de la tournée</span>
-              <strong>{progress}%</strong>
-            </div>
+          <div className="agent-dashboard-grid">
+            <section className="agent-card-pro large">
+              {route ? (
+                <>
+                  <div className="agent-card-header">
+                    <div>
+                      <h2>Tournée assignée</h2>
+                      <p>
+                        {route.nom ?? `Tournée #${route.id?.slice(0, 8)}`}
+                        {route.date_debut
+                          ? ` — ${new Date(route.date_debut).toLocaleDateString("fr-FR")}`
+                          : ""}
+                      </p>
+                    </div>
 
-            <div className="progress-bar">
-              <div
-                className="progress-fill green"
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-          </div>
+                    <span className="agent-status-badge">
+                      {STATUT_LABEL[route.statut] ?? route.statut}
+                    </span>
+                  </div>
 
-          <div className="agent-route-steps">
-            {routeSteps.map((step) => (
-              <article className="agent-step-card" key={step.id}>
-                <div>
-                  <h3>{step.container}</h3>
-                  <p>{step.location}</p>
+                  {totalSteps > 0 && (
+                    <div className="agent-progress-block">
+                      <div className="agent-progress-info">
+                        <span>Progression ({completedSteps}/{totalSteps} étapes)</span>
+                        <strong>{progress}%</strong>
+                      </div>
+
+                      <div className="progress-bar">
+                        <div
+                          className="progress-fill green"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {steps.length > 0 ? (
+                    <div className="agent-route-steps">
+                      {steps.slice(0, 5).map((step) => (
+                        <article className="agent-step-card" key={step.id}>
+                          <div>
+                            <h3>Étape {step.ordre_passage ?? "—"}</h3>
+                            <p>{step.container_id ?? "Conteneur non précisé"}</p>
+                          </div>
+
+                          <div className="agent-step-meta">
+                            <strong>{step.collecte_effectuee ? "Collecté" : "À collecter"}</strong>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>Aucune étape définie pour cette tournée.</p>
+                  )}
+                </>
+              ) : (
+                <div className="agent-card-header">
+                  <div>
+                    <h2>Aucune tournée en cours</h2>
+                    <p>Aucune tournée avec statut EN_COURS ne vous est assignée pour le moment.</p>
+                  </div>
                 </div>
+              )}
+            </section>
 
-                <div className="agent-step-meta">
-                  <span>{step.fillLevel}%</span>
-                  <strong>{step.status}</strong>
+            <section className="agent-card-pro">
+              <h2>Actions rapides</h2>
+
+              <div className="agent-action-list">
+                <Link to="/space/agent/routes">
+                  <strong>Valider une collecte</strong>
+                  <span>Confirmer le passage et le volume collecté.</span>
+                </Link>
+
+                <Link to="/space/agent/reports">
+                  <strong>Signaler une anomalie</strong>
+                  <span>Conteneur inaccessible, endommagé ou accès bloqué.</span>
+                </Link>
+
+                <Link to="/space/agent/routes">
+                  <strong>Voir les étapes restantes</strong>
+                  <span>Consulter l'ordre de passage de la tournée.</span>
+                </Link>
+              </div>
+            </section>
+
+            <section className="agent-card-pro">
+              <h2>Anomalies ouvertes</h2>
+
+              {incidents.length === 0 ? (
+                <p>Aucune anomalie ouverte.</p>
+              ) : (
+                <div className="agent-incidents-list">
+                  {incidents.map((incident) => (
+                    <article className="agent-incident-card" key={incident.id}>
+                      <div>
+                        <h3>{incident.type_incident}</h3>
+                        <p>{incident.description ?? "—"}</p>
+                      </div>
+
+                      <span>{STATUT_LABEL[incident.statut] ?? incident.statut}</span>
+                    </article>
+                  ))}
                 </div>
-              </article>
-            ))}
+              )}
+            </section>
           </div>
-        </section>
-
-        <section className="agent-card-pro">
-          <h2>Actions rapides</h2>
-
-          <div className="agent-action-list">
-            <Link to="/space/agent/routes">
-              <strong>Valider une collecte</strong>
-              <span>Confirmer le passage et le volume collecté.</span>
-            </Link>
-
-            <Link to="/space/agent/reports">
-              <strong>Signaler une anomalie</strong>
-              <span>Conteneur inaccessible, endommagé ou accès bloqué.</span>
-            </Link>
-
-            <Link to="/space/agent/routes">
-              <strong>Voir les étapes restantes</strong>
-              <span>Consulter l’ordre de passage de la tournée.</span>
-            </Link>
-          </div>
-        </section>
-
-        <section className="agent-card-pro">
-          <h2>Anomalies à traiter</h2>
-
-          <div className="agent-incidents-list">
-            {incidents.map((incident) => (
-              <article className="agent-incident-card" key={incident.id}>
-                <div>
-                  <h3>{incident.title}</h3>
-                  <p>{incident.location}</p>
-                </div>
-
-                <span>{incident.status}</span>
-              </article>
-            ))}
-          </div>
-        </section>
-      </div>
+        </>
+      )}
     </div>
   );
 }

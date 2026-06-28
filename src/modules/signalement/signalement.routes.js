@@ -1,22 +1,15 @@
-/**
- * Fichier : signalements.routes.js
- * Endpoints :
- * - GET    /api/signalements
- * - GET    /api/signalements/:id
- * - POST   /api/signalements
- * - PATCH  /api/signalements/:id
- * - DELETE /api/signalements/:id
- */
-
-
-// src/modules/signalements/signalements.routes.js
 const router = require("express").Router();
 const c = require("./signalement.controller");
+const { authorize } = require("../../middleware/authorize.middleware");
 
-router.get("/", c.list);
-router.get("/:id", c.getById);
-router.post("/", c.create);
-router.patch("/:id", c.update);
-router.delete("/:id", c.remove);
+const TOUS          = ["admin", "gestionnaire", "agent", "analyste", "citoyen"];
+const GESTION_AGENT = ["admin", "gestionnaire", "agent"];
+const GESTION       = ["admin", "gestionnaire"];
+
+router.get("/",       authorize(TOUS),          c.list);
+router.get("/:id",    authorize(TOUS),          c.getById);
+router.post("/",      authorize(TOUS),          c.create);        // tout le monde peut signaler
+router.patch("/:id",  authorize(GESTION_AGENT), c.update);        // valider/modifier statut
+router.delete("/:id", authorize(["admin"]),     c.remove);
 
 module.exports = router;

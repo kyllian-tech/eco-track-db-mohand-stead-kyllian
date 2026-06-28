@@ -1,4 +1,38 @@
+import { useState, useEffect } from "react";
+import { getProfiles } from "../api/profiles";
+import { getContainers } from "../api/containers";
+import { getSignalements } from "../api/signalements";
+
 function AdminSpace() {
+  const [stats, setStats] = useState({
+    users: 0,
+    containers: 0,
+    signalements: 0,
+    open: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      getProfiles(),
+      getContainers(),
+      getSignalements(),
+    ])
+      .then(([profiles, containers, signalements]) => {
+        const p = Array.isArray(profiles) ? profiles : (profiles?.data ?? []);
+        const c = Array.isArray(containers) ? containers : (containers?.data ?? []);
+        const s = Array.isArray(signalements) ? signalements : (signalements?.data ?? []);
+        setStats({
+          users: p.length,
+          containers: c.length,
+          signalements: s.length,
+          open: s.filter((sig) => sig.statut === "OUVERT").length,
+        });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <div className="role-page-pro">
       <div className="page-title-row">
@@ -15,22 +49,22 @@ function AdminSpace() {
       <div className="containers-overview">
         <div className="overview-card">
           <span>Utilisateurs</span>
-          <strong>68</strong>
+          <strong>{loading ? "…" : stats.users}</strong>
         </div>
 
         <div className="overview-card success">
-          <span>Rôles actifs</span>
-          <strong>4</strong>
+          <span>Conteneurs</span>
+          <strong>{loading ? "…" : stats.containers}</strong>
         </div>
 
         <div className="overview-card warning">
-          <span>Règles sécurité</span>
-          <strong>15</strong>
+          <span>Signalements</span>
+          <strong>{loading ? "…" : stats.signalements}</strong>
         </div>
 
         <div className="overview-card danger">
-          <span>Alertes cyber</span>
-          <strong>3</strong>
+          <span>Signalements ouverts</span>
+          <strong>{loading ? "…" : stats.open}</strong>
         </div>
       </div>
 

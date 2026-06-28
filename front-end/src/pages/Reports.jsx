@@ -1,140 +1,123 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { getSignalements, createSignalement, updateSignalement } from "../api/signalements";
+import { getContainers } from "../api/containers";
+
+function formatDate(dateStr) {
+  if (!dateStr) return "—";
+  try {
+    return new Date(dateStr).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+  } catch {
+    return dateStr;
+  }
+}
+
+function getPriorityClass(statut) {
+  if (statut === "OUVERT") return "critical";
+  if (statut === "EN_COURS") return "warning";
+  return "normal";
+}
+
+function getStatusClass(statut) {
+  if (statut === "OUVERT") return "new";
+  if (statut === "EN_COURS") return "processing";
+  if (statut === "RESOLU") return "done";
+  return "default";
+}
+
+function formatStatut(statut) {
+  const map = {
+    OUVERT: "Ouvert",
+    EN_COURS: "En traitement",
+    RESOLU: "Résolu",
+  };
+  return map[statut] || statut || "—";
+}
 
 function Reports() {
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const [agentReports, setAgentReports] = useState([
-    {
-      id: 1,
-      title: "Accès partiellement bloqué",
-      type: "Accès bloqué",
-      location: "Rue des Écoles",
-      priority: "Élevée",
-      status: "Nouveau",
-      comment: "Stationnement gênant devant le conteneur.",
-    },
-    {
-      id: 2,
-      title: "Conteneur endommagé",
-      type: "Matériel endommagé",
-      location: "Place Centrale",
-      priority: "Critique",
-      status: "En traitement",
-      comment: "Couvercle cassé, collecte possible avec prudence.",
-    },
-  ]);
+  const [reports, setReports] = useState([]);
+  const [containers, setContainers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [newReport, setNewReport] = useState({
     type: "Accès bloqué",
-    location: "",
-    priority: "Normale",
-    comment: "",
+    container_id: "",
+    description: "",
   });
 
-  const managerReports = [
-    {
-      id: 1,
-      title: "Conteneur plein",
-      location: "Place Centrale",
-      author: "Citoyen",
-      status: "Nouveau",
-      priority: "Critique",
-    },
-    {
-      id: 2,
-      title: "Conteneur endommagé",
-      location: "Rue des Écoles",
-      author: "Agent A",
-      status: "En traitement",
-      priority: "Élevée",
-    },
-    {
-      id: 3,
-      title: "Dépôt sauvage",
-      location: "Avenue Verte",
-      author: "Citoyen",
-      status: "Résolu",
-      priority: "Normale",
-    },
-  ];
+  useEffect(() => {
+    async function load() {
+      try {
+        const params = user?.role === "agent" ? { user_id: user.id } : {};
+        const [data, ctrs] = await Promise.all([
+          getSignalements(params),
+          getContainers(),
+        ]);
+        setReports(data);
+        setContainers(Array.isArray(ctrs) ? ctrs : (ctrs?.data ?? []));
+      } catch {
+        showToast("Erreur lors du chargement des signalements.", "error");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [user]);
 
   const handleNewReportChange = (event) => {
     const { name, value } = event.target;
-
-    setNewReport((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    setNewReport(current => ({ ...current, [name]: value }));
   };
 
-  const handleCreateAgentReport = (event) => {
+  const handleCreateReport = async (event) => {
     event.preventDefault();
 
-    if (!newReport.location.trim() || !newReport.comment.trim()) {
-      showToast("Veuillez renseigner la localisation et le commentaire.", "error");
+    if (!newReport.description.trim()) {
+      showToast("Veuillez renseigner une description.", "error");
       return;
     }
 
-    const createdReport = {
-      id: Date.now(),
-      title: newReport.type,
-      type: newReport.type,
-      location: newReport.location,
-      priority: newReport.priority,
-      status: "Nouveau",
-      comment: newReport.comment,
-    };
+    if (!newReport.container_id) {
+      showToast("Veuillez sélectionner un conteneur concerné.", "error");
+      return;
+    }
 
-    setAgentReports((current) => [createdReport, ...current]);
+    try {
+      const created = await createSignalement({
+        user_id: user.id,
+        container_id: newReport.container_id,
+        type_incident: newReport.type,
+        description: newReport.description,
+        statut: "OUVERT",
+      });
 
-    setNewReport({
-      type: "Accès bloqué",
-      location: "",
-      priority: "Normale",
-      comment: "",
-    });
-
-    showToast("Anomalie terrain enregistrée.", "success");
+      setReports(current => [created, ...current]);
+      setNewReport({ type: "Accès bloqué", container_id: "", description: "" });
+      showToast("Signalement enregistré.", "success");
+    } catch (err) {
+      showToast(err.response?.data?.message || "Erreur lors de l'envoi.", "error");
+    }
   };
 
-  const updateAgentReportStatus = (id, status) => {
-    setAgentReports((current) =>
-      current.map((report) =>
-        report.id === id ? { ...report, status } : report
-      )
-    );
-
-    showToast("Statut de l’anomalie mis à jour.", "success");
+  const handleUpdateStatut = async (id, statut) => {
+    try {
+      const updated = await updateSignalement(id, { statut });
+      setReports(current => current.map(r => r.id === id ? { ...r, ...updated } : r));
+      showToast("Statut mis à jour.", "success");
+    } catch (err) {
+      showToast(err.response?.data?.message || "Erreur lors de la mise à jour.", "error");
+    }
   };
 
-  const getPriorityClass = (priority) => {
-    if (priority === "Critique") return "critical";
-    if (priority === "Élevée") return "warning";
-    return "normal";
-  };
-
-  const getStatusClass = (status) => {
-    if (status === "Nouveau") return "new";
-    if (status === "En traitement") return "processing";
-    if (status === "Résolu" || status === "Traité") return "done";
-    return "default";
-  };
-
+  // ── Vue AGENT ──────────────────────────────────────────────────────────────
   if (user?.role === "agent") {
-    const newCount = agentReports.filter(
-      (report) => report.status === "Nouveau"
-    ).length;
-
-    const processingCount = agentReports.filter(
-      (report) => report.status === "En traitement"
-    ).length;
-
-    const doneCount = agentReports.filter(
-      (report) => report.status === "Traité"
-    ).length;
+    const newCount = reports.filter(r => r.statut === "OUVERT").length;
+    const processingCount = reports.filter(r => r.statut === "EN_COURS").length;
+    const doneCount = reports.filter(r => r.statut === "RESOLU").length;
 
     return (
       <div className="agent-reports-page-pro">
@@ -152,22 +135,22 @@ function Reports() {
         <div className="containers-overview">
           <div className="overview-card">
             <span>Total</span>
-            <strong>{agentReports.length}</strong>
+            <strong>{loading ? "…" : reports.length}</strong>
           </div>
 
           <div className="overview-card danger">
             <span>Nouveaux</span>
-            <strong>{newCount}</strong>
+            <strong>{loading ? "…" : newCount}</strong>
           </div>
 
           <div className="overview-card warning">
             <span>En traitement</span>
-            <strong>{processingCount}</strong>
+            <strong>{loading ? "…" : processingCount}</strong>
           </div>
 
           <div className="overview-card success">
             <span>Traités</span>
-            <strong>{doneCount}</strong>
+            <strong>{loading ? "…" : doneCount}</strong>
           </div>
         </div>
 
@@ -175,14 +158,10 @@ function Reports() {
           <section className="agent-report-card">
             <h2>Nouvelle anomalie</h2>
 
-            <form className="agent-report-form" onSubmit={handleCreateAgentReport}>
+            <form className="agent-report-form" onSubmit={handleCreateReport}>
               <div className="form-group">
-                <label>Type d’anomalie</label>
-                <select
-                  name="type"
-                  value={newReport.type}
-                  onChange={handleNewReportChange}
-                >
+                <label>Type d'anomalie</label>
+                <select name="type" value={newReport.type} onChange={handleNewReportChange}>
                   <option>Accès bloqué</option>
                   <option>Matériel endommagé</option>
                   <option>Conteneur inaccessible</option>
@@ -192,42 +171,30 @@ function Reports() {
               </div>
 
               <div className="form-group">
-                <label>Localisation</label>
-                <input
-                  type="text"
-                  name="location"
-                  placeholder="Ex : Rue des Écoles"
-                  value={newReport.location}
-                  onChange={handleNewReportChange}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Priorité</label>
-                <select
-                  name="priority"
-                  value={newReport.priority}
-                  onChange={handleNewReportChange}
-                >
-                  <option>Normale</option>
-                  <option>Élevée</option>
-                  <option>Critique</option>
+                <label>Conteneur concerné</label>
+                <select name="container_id" value={newReport.container_id} onChange={handleNewReportChange} required>
+                  <option value="">-- Sélectionner un conteneur --</option>
+                  {containers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code} — {c.type} {c.zone_id ? `(zone ${c.zone_id})` : ""}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div className="form-group">
-                <label>Commentaire</label>
+                <label>Description</label>
                 <textarea
-                  name="comment"
+                  name="description"
                   placeholder="Décrivez le problème constaté..."
-                  value={newReport.comment}
+                  value={newReport.description}
                   onChange={handleNewReportChange}
                   rows="5"
-                ></textarea>
+                />
               </div>
 
               <button type="submit" className="primary-btn">
-                Enregistrer l’anomalie
+                Enregistrer l'anomalie
               </button>
             </form>
           </section>
@@ -235,60 +202,62 @@ function Reports() {
           <section className="agent-report-card large">
             <h2>Anomalies déclarées</h2>
 
-            <div className="agent-report-list">
-              {agentReports.map((report) => (
-                <article className="agent-report-row" key={report.id}>
-                  <div>
-                    <h3>{report.title}</h3>
-                    <p>{report.location}</p>
-                    <span>{report.comment}</span>
+            {loading ? (
+              <p>Chargement…</p>
+            ) : (
+              <div className="agent-report-list">
+                {reports.length === 0 && (
+                  <div className="empty-state-pro">
+                    <h3>Aucun signalement</h3>
+                    <p>Déclarez votre première anomalie ci-contre.</p>
+                  </div>
+                )}
+                {reports.map(report => (
+                  <article className="agent-report-row" key={report.id}>
+                    <div>
+                      <h3>{report.type_incident}</h3>
+                      <p>{formatDate(report.created_at)}</p>
+                      {report.description && <span>{report.description}</span>}
 
-                    <div className="agent-report-tags">
-                      <strong className={getPriorityClass(report.priority)}>
-                        {report.priority}
-                      </strong>
-                      <strong className={getStatusClass(report.status)}>
-                        {report.status}
-                      </strong>
+                      <div className="agent-report-tags">
+                        <strong className={getStatusClass(report.statut)}>
+                          {formatStatut(report.statut)}
+                        </strong>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="agent-report-actions">
-                    <button
-                      className="secondary-btn"
-                      onClick={() =>
-                        updateAgentReportStatus(report.id, "En traitement")
-                      }
-                    >
-                      En traitement
-                    </button>
+                    <div className="agent-report-actions">
+                      <button
+                        className="secondary-btn"
+                        onClick={() => handleUpdateStatut(report.id, "en_cours")}
+                        disabled={report.statut === "EN_COURS"}
+                      >
+                        En traitement
+                      </button>
 
-                    <button
-                      className="primary-btn"
-                      onClick={() => updateAgentReportStatus(report.id, "Traité")}
-                    >
-                      Marquer traité
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
+                      <button
+                        className="primary-btn"
+                        onClick={() => handleUpdateStatut(report.id, "RESOLU")}
+                        disabled={report.statut === "RESOLU"}
+                      >
+                        Marquer traité
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         </div>
       </div>
     );
   }
 
-  const totalReports = managerReports.length;
-  const newReports = managerReports.filter(
-    (report) => report.status === "Nouveau"
-  ).length;
-  const processingReports = managerReports.filter(
-    (report) => report.status === "En traitement"
-  ).length;
-  const resolvedReports = managerReports.filter(
-    (report) => report.status === "Résolu"
-  ).length;
+  // ── Vue MANAGER ────────────────────────────────────────────────────────────
+  const totalReports = reports.length;
+  const newReports = reports.filter(r => r.statut === "OUVERT").length;
+  const processingReports = reports.filter(r => r.statut === "EN_COURS").length;
+  const resolvedReports = reports.filter(r => r.statut === "RESOLU").length;
 
   return (
     <div className="reports-page-pro">
@@ -306,41 +275,68 @@ function Reports() {
       <div className="containers-overview">
         <div className="overview-card">
           <span>Total</span>
-          <strong>{totalReports}</strong>
+          <strong>{loading ? "…" : totalReports}</strong>
         </div>
 
         <div className="overview-card danger">
           <span>Nouveaux</span>
-          <strong>{newReports}</strong>
+          <strong>{loading ? "…" : newReports}</strong>
         </div>
 
         <div className="overview-card warning">
           <span>En traitement</span>
-          <strong>{processingReports}</strong>
+          <strong>{loading ? "…" : processingReports}</strong>
         </div>
 
         <div className="overview-card success">
           <span>Résolus</span>
-          <strong>{resolvedReports}</strong>
+          <strong>{loading ? "…" : resolvedReports}</strong>
         </div>
       </div>
 
       <section className="reports-panel-pro">
-        {managerReports.map((report) => (
+        {loading && <p style={{ padding: "1rem" }}>Chargement…</p>}
+
+        {!loading && reports.length === 0 && (
+          <div className="empty-state-pro">
+            <h3>Aucun signalement</h3>
+            <p>Les signalements citoyens et agents apparaîtront ici.</p>
+          </div>
+        )}
+
+        {!loading && reports.map(report => (
           <article className="report-row-pro" key={report.id}>
             <div>
-              <h3>{report.title}</h3>
-              <p>{report.location}</p>
+              <h3>{report.type_incident}</h3>
+              <p>{report.description || "—"}</p>
+              <small style={{ color: "var(--text-muted, #888)" }}>
+                {formatDate(report.created_at)}
+              </small>
             </div>
 
             <div className="report-row-meta">
-              <span>{report.author}</span>
-              <strong className={getPriorityClass(report.priority)}>
-                {report.priority}
+              <strong className={getPriorityClass(report.statut)}>
+                {formatStatut(report.statut)}
               </strong>
-              <strong className={getStatusClass(report.status)}>
-                {report.status}
-              </strong>
+
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button
+                  className="secondary-btn"
+                  style={{ fontSize: "0.8rem", padding: "0.3rem 0.7rem" }}
+                  onClick={() => handleUpdateStatut(report.id, "EN_COURS")}
+                  disabled={report.statut === "EN_COURS"}
+                >
+                  En traitement
+                </button>
+                <button
+                  className="primary-btn"
+                  style={{ fontSize: "0.8rem", padding: "0.3rem 0.7rem" }}
+                  onClick={() => handleUpdateStatut(report.id, "RESOLU")}
+                  disabled={report.statut === "RESOLU"}
+                >
+                  Résoudre
+                </button>
+              </div>
             </div>
           </article>
         ))}

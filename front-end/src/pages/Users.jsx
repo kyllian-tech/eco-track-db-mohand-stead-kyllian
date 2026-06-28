@@ -1,237 +1,195 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useToast } from "../context/ToastContext";
+import { getProfiles } from "../api/profiles";
+import { adminCreateUserApi } from "../api/auth";
+
+const ROLE_LABEL = {
+  admin: "Administrateur",
+  gestionnaire: "Gestionnaire",
+  agent: "Agent terrain",
+  citoyen: "Citoyen",
+  analyste: "Analyste",
+};
+
+const EMPTY_FORM = { email: "", password: "", full_name: "", role: "agent" };
+
+function CreateUserModal({ onClose, onCreated }) {
+  const { showToast } = useToast();
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (form.password.length < 8) {
+      setError("Le mot de passe doit contenir au moins 8 caractères.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const newUser = await adminCreateUserApi(form);
+      showToast(`Compte créé : ${newUser.email}`, "success");
+      onCreated(newUser);
+      onClose();
+    } catch (err) {
+      const msg = err?.response?.data?.message || "Erreur lors de la création.";
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
+      }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div style={{
+        background: "#fff", borderRadius: "12px", padding: "2rem",
+        width: "100%", maxWidth: "440px", boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+      }}>
+        <h2 style={{ marginBottom: "1.25rem" }}>Créer un utilisateur</h2>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+          <div>
+            <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.3rem", fontWeight: 500 }}>
+              Nom complet
+            </label>
+            <input
+              type="text"
+              placeholder="Jean Dupont"
+              value={form.full_name}
+              onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
+              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #d1d5db", fontSize: "0.95rem" }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.3rem", fontWeight: 500 }}>
+              Email <span style={{ color: "#ef4444" }}>*</span>
+            </label>
+            <input
+              type="email"
+              required
+              placeholder="nom@ecotrack.fr"
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #d1d5db", fontSize: "0.95rem" }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.3rem", fontWeight: 500 }}>
+              Mot de passe <span style={{ color: "#ef4444" }}>*</span>
+            </label>
+            <input
+              type="password"
+              required
+              placeholder="8 caractères minimum"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #d1d5db", fontSize: "0.95rem" }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.3rem", fontWeight: 500 }}>
+              Rôle <span style={{ color: "#ef4444" }}>*</span>
+            </label>
+            <select
+              value={form.role}
+              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #d1d5db", fontSize: "0.95rem" }}
+            >
+              <option value="agent">Agent terrain</option>
+              <option value="gestionnaire">Gestionnaire</option>
+              <option value="analyste">Analyste</option>
+              <option value="admin">Administrateur</option>
+            </select>
+          </div>
+
+          {error && (
+            <p style={{ color: "#ef4444", fontSize: "0.85rem", margin: 0 }}>{error}</p>
+          )}
+
+          <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-primary"
+              style={{ flex: 1 }}
+            >
+              {saving ? "Création…" : "Créer le compte"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn-secondary"
+              style={{ flex: 1 }}
+            >
+              Annuler
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function Users() {
   const { showToast } = useToast();
 
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("Tous");
-  const [editingUserId, setEditingUserId] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
-  const [users, setUsers] = useState([
-    {
-      id: 1,
-      name: "Administrateur",
-      email: "admin@ecotrack.com",
-      role: "Administrateur",
-      permissions: "Accès complet",
-      status: "Actif",
-    },
-    {
-      id: 2,
-      name: "Agent A",
-      email: "agent@ecotrack.com",
-      role: "Agent terrain",
-      permissions: "Tournées, Signalements",
-      status: "Actif",
-    },
-    {
-      id: 3,
-      name: "Gestionnaire Ville",
-      email: "manager@ecotrack.com",
-      role: "Gestionnaire",
-      permissions: "Dashboard, Conteneurs, Tournées, Analytics",
-      status: "Actif",
-    },
-    {
-      id: 4,
-      name: "Citoyen Demo",
-      email: "citoyen@ecotrack.com",
-      role: "Citoyen",
-      permissions: "Signalements, Gamification, Profil",
-      status: "Actif",
-    },
-    {
-      id: 5,
-      name: "Observateur Data",
-      email: "data@ecotrack.com",
-      role: "Lecteur",
-      permissions: "Lecture seule",
-      status: "Inactif",
-    },
-  ]);
+  useEffect(() => {
+    getProfiles()
+      .then((data) => setUsers(Array.isArray(data) ? data : (data?.data ?? [])))
+      .catch(() => showToast("Erreur lors du chargement des utilisateurs.", "error"))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    role: "Citoyen",
-    permissions: "Signalements, Gamification, Profil",
-    status: "Actif",
-  });
-
-  const rolePermissions = {
-    Administrateur: "Accès complet",
-    Gestionnaire: "Dashboard, Conteneurs, Tournées, Analytics",
-    "Agent terrain": "Tournées, Signalements",
-    Citoyen: "Signalements, Gamification, Profil",
-    Lecteur: "Lecture seule",
-  };
-
-  const writeAuditLog = (action, targetUser) => {
-    const previousLogs = JSON.parse(
-      localStorage.getItem("ecotrack_audit_logs") || "[]"
-    );
-
-    const newLog = {
-      id: Date.now(),
-      action,
-      target: targetUser.name,
-      email: targetUser.email,
-      module: "Utilisateurs",
-      actor: "Administrateur",
-      date: new Date().toLocaleString("fr-FR"),
-    };
-
-    localStorage.setItem(
-      "ecotrack_audit_logs",
-      JSON.stringify([newLog, ...previousLogs])
-    );
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      email: "",
-      role: "Citoyen",
-      permissions: "Signalements, Gamification, Profil",
-      status: "Actif",
-    });
-
-    setEditingUserId(null);
-  };
-
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-
-    if (name === "role") {
-      setFormData((current) => ({
-        ...current,
-        role: value,
-        permissions: rolePermissions[value],
-      }));
-      return;
-    }
-
-    setFormData((current) => ({
-      ...current,
-      [name]: value,
-    }));
-  };
-
-  const handleSubmit = (event) => {
-    event.preventDefault();
-
-    if (!formData.name.trim() || !formData.email.trim()) {
-      showToast("Veuillez renseigner le nom et l’email.", "error");
-      return;
-    }
-
-    if (editingUserId) {
-      setUsers((current) =>
-        current.map((user) =>
-          user.id === editingUserId ? { ...user, ...formData } : user
-        )
-      );
-
-      writeAuditLog("Modification utilisateur", formData);
-      showToast("Utilisateur modifié avec succès.", "success");
-      resetForm();
-      return;
-    }
-
-    const createdUser = {
-      id: Date.now(),
-      ...formData,
-    };
-
-    setUsers((current) => [createdUser, ...current]);
-
-    writeAuditLog("Création utilisateur", createdUser);
-    showToast("Utilisateur créé avec succès.", "success");
-    resetForm();
-  };
-
-  const handleEdit = (user) => {
-    setEditingUserId(user.id);
-
-    setFormData({
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      permissions: user.permissions,
-      status: user.status,
-    });
-
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const toggleStatus = (id) => {
-    setUsers((current) =>
-      current.map((user) => {
-        if (user.id !== id) return user;
-
-        const updatedUser = {
-          ...user,
-          status: user.status === "Actif" ? "Inactif" : "Actif",
-        };
-
-        writeAuditLog(
-          updatedUser.status === "Actif"
-            ? "Réactivation utilisateur"
-            : "Désactivation utilisateur",
-          updatedUser
-        );
-
-        return updatedUser;
-      })
-    );
-
-    showToast("Statut utilisateur mis à jour.", "success");
-  };
-
-  const handleDelete = (id) => {
-    const userToDelete = users.find((user) => user.id === id);
-
-    if (!userToDelete) return;
-
-    setUsers((current) => current.filter((user) => user.id !== id));
-
-    writeAuditLog("Suppression utilisateur", userToDelete);
-    showToast("Utilisateur supprimé.", "success");
+  const handleUserCreated = (newUser) => {
+    setUsers((prev) => [{ ...newUser, points: 0 }, ...prev]);
   };
 
   const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
+    return users.filter((u) => {
       const search = searchTerm.toLowerCase();
-
       const matchesSearch =
-        user.name.toLowerCase().includes(search) ||
-        user.email.toLowerCase().includes(search) ||
-        user.role.toLowerCase().includes(search);
-
-      const matchesRole = roleFilter === "Tous" || user.role === roleFilter;
-
+        (u.full_name ?? u.email ?? "").toLowerCase().includes(search) ||
+        (u.email ?? "").toLowerCase().includes(search) ||
+        (u.role ?? "").toLowerCase().includes(search);
+      const matchesRole = roleFilter === "Tous" || u.role === roleFilter;
       return matchesSearch && matchesRole;
     });
   }, [users, searchTerm, roleFilter]);
 
-  const activeCount = users.filter((user) => user.status === "Actif").length;
-  const inactiveCount = users.filter((user) => user.status === "Inactif").length;
-  const adminCount = users.filter(
-    (user) => user.role === "Administrateur"
-  ).length;
-
   return (
     <div className="users-page-pro">
+      {showModal && (
+        <CreateUserModal
+          onClose={() => setShowModal(false)}
+          onCreated={handleUserCreated}
+        />
+      )}
+
       <div className="page-title-row">
         <div>
           <span className="eyebrow">Gestion des accès</span>
           <h1>Utilisateurs</h1>
-          <p>
-            Créez, modifiez, désactivez et supprimez les comptes utilisateurs de
-            la plateforme ECOTRACK.
-          </p>
+          <p>Consultez et gérez les comptes utilisateurs de la plateforme ECOTRACK.</p>
         </div>
+        <button className="btn-primary" onClick={() => setShowModal(true)}>
+          + Créer un utilisateur
+        </button>
       </div>
 
       <div className="containers-overview">
@@ -239,93 +197,19 @@ function Users() {
           <span>Total</span>
           <strong>{users.length}</strong>
         </div>
-
         <div className="overview-card success">
-          <span>Actifs</span>
-          <strong>{activeCount}</strong>
+          <span>Citoyens</span>
+          <strong>{users.filter((u) => u.role === "citoyen").length}</strong>
         </div>
-
         <div className="overview-card warning">
-          <span>Inactifs</span>
-          <strong>{inactiveCount}</strong>
+          <span>Agents</span>
+          <strong>{users.filter((u) => u.role === "agent").length}</strong>
         </div>
-
         <div className="overview-card">
-          <span>Administrateurs</span>
-          <strong>{adminCount}</strong>
+          <span>Admins</span>
+          <strong>{users.filter((u) => u.role === "admin").length}</strong>
         </div>
       </div>
-
-      <section className="user-admin-panel">
-        <h2>{editingUserId ? "Modifier un utilisateur" : "Créer un utilisateur"}</h2>
-
-        <form className="user-admin-form" onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Nom complet</label>
-            <input
-              type="text"
-              name="name"
-              placeholder="Ex : Agent Collecte"
-              value={formData.name}
-              onChange={handleChange}
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Email</label>
-            <input
-              type="email"
-              name="email"
-              placeholder="Ex : agent@ecotrack.com"
-              value={formData.email}
-              onChange={handleChange}
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Rôle</label>
-            <select name="role" value={formData.role} onChange={handleChange}>
-              <option>Citoyen</option>
-              <option>Agent terrain</option>
-              <option>Gestionnaire</option>
-              <option>Administrateur</option>
-              <option>Lecteur</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Statut</label>
-            <select
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-            >
-              <option>Actif</option>
-              <option>Inactif</option>
-            </select>
-          </div>
-
-          <div className="form-group permissions-field">
-            <label>Permissions</label>
-            <input
-              type="text"
-              name="permissions"
-              value={formData.permissions}
-              onChange={handleChange}
-            />
-          </div>
-
-          <button type="submit" className="primary-btn">
-            {editingUserId ? "Enregistrer" : "Créer"}
-          </button>
-
-          {editingUserId && (
-            <button type="button" className="secondary-btn" onClick={resetForm}>
-              Annuler
-            </button>
-          )}
-        </form>
-      </section>
 
       <section className="user-admin-panel">
         <div className="panel-toolbar">
@@ -335,88 +219,62 @@ function Users() {
               type="text"
               placeholder="Nom, email ou rôle..."
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
 
           <select
             className="select-pro"
             value={roleFilter}
-            onChange={(event) => setRoleFilter(event.target.value)}
+            onChange={(e) => setRoleFilter(e.target.value)}
           >
-            <option>Tous</option>
-            <option>Citoyen</option>
-            <option>Agent terrain</option>
-            <option>Gestionnaire</option>
-            <option>Administrateur</option>
-            <option>Lecteur</option>
+            <option value="Tous">Tous</option>
+            <option value="citoyen">Citoyen</option>
+            <option value="agent">Agent terrain</option>
+            <option value="gestionnaire">Gestionnaire</option>
+            <option value="admin">Administrateur</option>
+            <option value="analyste">Analyste</option>
           </select>
         </div>
 
-        <div className="users-table-pro">
-          <div className="users-table-header">
-            <span>Utilisateur</span>
-            <span>Rôle</span>
-            <span>Permissions</span>
-            <span>Statut</span>
-            <span>Actions</span>
+        {loading ? (
+          <p>Chargement…</p>
+        ) : filteredUsers.length === 0 ? (
+          <p>Aucun utilisateur trouvé.</p>
+        ) : (
+          <div className="users-table-pro">
+            <div className="users-table-header">
+              <span>Utilisateur</span>
+              <span>Rôle</span>
+              <span>Points</span>
+              <span>ID</span>
+            </div>
+
+            {filteredUsers.map((u) => (
+              <article className="users-table-row" key={u.id}>
+                <div className="user-cell">
+                  <div className="user-avatar">
+                    {(u.full_name ?? u.email ?? "?").charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <strong>{u.full_name ?? "—"}</strong>
+                    <small>{u.email}</small>
+                  </div>
+                </div>
+
+                <span className="role-badge">
+                  {ROLE_LABEL[u.role] ?? u.role ?? "—"}
+                </span>
+
+                <span>{u.points ?? 0} pts</span>
+
+                <small style={{ color: "var(--text-muted, #888)", fontSize: "0.7rem" }}>
+                  {u.id?.slice(0, 8)}…
+                </small>
+              </article>
+            ))}
           </div>
-
-          {filteredUsers.map((user) => (
-            <article className="users-table-row" key={user.id}>
-              <div className="user-cell">
-                <div className="user-avatar">
-                  {user.name.charAt(0).toUpperCase()}
-                </div>
-
-                <div>
-                  <strong>{user.name}</strong>
-                  <small>{user.email}</small>
-                </div>
-              </div>
-
-              <span className="role-badge">{user.role}</span>
-
-              <span className="permissions-text">{user.permissions}</span>
-
-              <span
-                className={
-                  user.status === "Actif"
-                    ? "status-pill active"
-                    : "status-pill inactive"
-                }
-              >
-                {user.status}
-              </span>
-
-              <div className="users-actions">
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => handleEdit(user)}
-                >
-                  Modifier
-                </button>
-
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => toggleStatus(user.id)}
-                >
-                  {user.status === "Actif" ? "Désactiver" : "Réactiver"}
-                </button>
-
-                <button
-                  type="button"
-                  className="danger-btn"
-                  onClick={() => handleDelete(user.id)}
-                >
-                  Supprimer
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
+        )}
       </section>
     </div>
   );

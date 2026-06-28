@@ -27,4 +27,13 @@ async function refresh(req, res, next) {
   }
 }
 
-module.exports = { register, login, refresh };
+async function adminCreate(req, res, next) {
+  try {
+    const user = await authService.adminCreateUser(req.body);
+    res.status(201).json(user);
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { register, login, refresh, adminCreate };

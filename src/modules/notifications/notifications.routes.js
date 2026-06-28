@@ -1,26 +1,15 @@
-/**
- * Fichier : notifications.routes.js
- * Rôle : Définition des routes HTTP liées aux notifications.
- * Endpoints :
- * - GET    /api/notifications
- * - GET    /api/notifications/:id
- * - POST   /api/notifications
- * - PATCH  /api/notifications/:id
- * - PATCH  /api/notifications/:id/read   (optionnel : marque comme lue)
- * - DELETE /api/notifications/:id
- */
-
-// src/modules/notifications/notifications.routes.js
 const router = require("express").Router();
 const c = require("./notifications.controller");
+const { authorize } = require("../../middleware/authorize.middleware");
 
-router.get("/", c.list);
-router.get("/:id", c.getById);
-router.post("/", c.create);
-router.patch("/:id", c.update);
-router.delete("/:id", c.remove);
+const TOUS    = ["admin", "gestionnaire", "agent", "analyste", "citoyen"];
+const GESTION = ["admin", "gestionnaire"];
 
-// route dédiée "read" (optionnelle mais propre)
-router.patch("/:id/read", c.markAsRead);
+router.get("/",          authorize(TOUS),    c.list);      // chacun voit les siennes
+router.get("/:id",       authorize(TOUS),    c.getById);
+router.post("/",         authorize(GESTION), c.create);    // envoi par gestionnaire/admin
+router.patch("/:id",     authorize(TOUS),    c.update);    // marquer comme lue
+router.patch("/:id/read",authorize(TOUS),    c.markAsRead);
+router.delete("/:id",    authorize(["admin"]), c.remove);
 
 module.exports = router;

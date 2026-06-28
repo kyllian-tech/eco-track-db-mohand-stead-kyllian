@@ -1,24 +1,14 @@
-// src/modules/routes/routes.routes.js
-/**
- * Fichier : routesRoutes.js
- * Rôle : Définition des routes HTTP liées aux routes.
- *
- * Endpoints :
- * - GET    /api/routes
- * - GET    /api/routes/:id
- * - POST   /api/routes
- * - PATCH  /api/routes/:id
- * - DELETE /api/routes/:id
- */
-
-
 const router = require("express").Router();
 const c = require("./routes.controller");
+const { authorize } = require("../../middleware/authorize.middleware");
 
-router.get("/", c.list);
-router.get("/:id", c.getById);
-router.post("/", c.create);
-router.patch("/:id", c.update);
-router.delete("/:id", c.remove);
+const GESTION       = ["admin", "gestionnaire"];
+const GESTION_AGENT = ["admin", "gestionnaire", "agent"];
+
+router.get("/",       authorize(GESTION_AGENT), c.list);
+router.get("/:id",    authorize(GESTION_AGENT), c.getById);
+router.post("/",      authorize(GESTION),       c.create);
+router.patch("/:id",  authorize(GESTION_AGENT), c.update);  // agent change le statut
+router.delete("/:id", authorize(GESTION),       c.remove);
 
 module.exports = router;
