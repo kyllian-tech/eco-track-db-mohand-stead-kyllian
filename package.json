@@ -34,7 +34,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.49.1",
-    "@stryker-mutator/core": "^8.7.1",
+    "@stryker-mutator/core": "^9.6.1",
     "eslint": "^10.6.0",
     "globals": "^17.7.0"
   }

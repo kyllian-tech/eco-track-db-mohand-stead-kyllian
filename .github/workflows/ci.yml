@@ -154,10 +154,10 @@ jobs:
           NODE_ENV: test
           JWT_SECRET: ci-test-secret-not-for-prod
           JWT_REFRESH_SECRET: ci-test-refresh-secret-not-for-prod
+      - name: Installer k6
+        uses: grafana/setup-k6-action@v1
       - name: k6 smoke test
-        uses: grafana/k6-action@v0.3.1
-        with:
-          filename: tests/load/k6-smoke.js
+        run: k6 run tests/load/k6-smoke.js
         env:
           BASE_URL: http://localhost:3000
 
