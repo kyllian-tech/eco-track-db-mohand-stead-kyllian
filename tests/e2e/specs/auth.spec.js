@@ -27,7 +27,7 @@ test.describe("Authentication API E2E", () => {
 
   test("login with invalid credentials returns 401", async ({ request }) => {
     const response = await request.post(`${BASE_URL}/api/auth/login`, {
-      data: { email: "nonexistent@test.com", password: "wrong" },
+      data: { email: "nonexistent@test.com", password: "wrongpassword123" },
     });
     expect(response.status()).toBe(401);
     const body = await response.json();
